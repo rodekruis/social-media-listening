@@ -6,11 +6,11 @@ Built to support Ethiopian Red Cross Society (ERCS).
 
 ## Setup
 Generic requirements:
--   [Google Cloud account](https://cloud.google.com/)
 -   [Twitter developer account](https://developer.twitter.com/en/apply-for-access)
--   [Azure account](https://azure.microsoft.com/en-us/get-started/) and 
+-   OPTIONAL (translate): [Google Cloud account](https://cloud.google.com/)
+-   OPTIONAL (upload to Azure datalake): [Azure account](https://azure.microsoft.com/en-us/get-started/) and 
 
-For 510: Google cloud service account accessible [here](https://console.cloud.google.com/apis/credentials?project=eth-conflict-tracker&folder=&organizationId=&supportedpurview=project), login credentials in Bitwarden
+For 510: Google cloud service account credentials are accessible [here](https://console.cloud.google.com/apis/credentials?project=eth-conflict-tracker&folder=&organizationId=&supportedpurview=project), login credentials in Bitwarden
 
 ### with Docker
 1. Install [Docker](https://www.docker.com/get-started)
@@ -30,7 +30,7 @@ docker build -t rodekruis/news-tracker-ethiopia .
 ```
 docker run -it --entrypoint /bin/bash rodekruis/news-tracker-ethiopia
 ```
-5. Check that everything is working by running the model (see [Usage](https://github.com/rodekruis/IBF-dengue-model#usage) below)
+5. Check that everything is working by running the pipeline (see [Usage](https://github.com/rodekruis/news-tracker-ethiopia#usage) below)
 
 
 ### Manual Setup
