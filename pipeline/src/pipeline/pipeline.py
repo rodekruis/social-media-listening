@@ -2,18 +2,19 @@ import datetime
 import os
 from pipeline.get_data import get_twitter, get_youtube
 from pipeline.parse_data import parse_data
-from pipeline.predict_sentiment_tweets import predict_sentiment_tweets
-from pipeline.predict_topic_tweets import predict_topic_tweets
-from pipeline.prepare_final_dataset import prepare_final_dataset
-from azure.storage.blob import BlobServiceClient, BlobClient
 import pandas as pd
 import logging
+import click
 logging.basicConfig()
 ch = logging.getLogger()
 ch.setLevel(logging.INFO)
 
 
-def main():
+@click.command()
+@click.option('--translate', is_flag=True, help='translate text with Google API')
+@click.option('--datalake', is_flag=True, help='upload to Azure datalake')
+def main(translate, datalake):
+
     utc_timestamp = datetime.datetime.utcnow().replace(
         tzinfo=datetime.timezone.utc).isoformat()
 
@@ -27,21 +28,23 @@ def main():
     df_keywords = pd.read_csv('config/keywords.csv')
     keywords = df_keywords.dropna()['keyword'].tolist()
 
+    use_datalake = datalake
+
     # execute pipeline
     try:
-        get_twitter(twitter_users_to_track)
+        get_twitter(twitter_users_to_track, use_datalake)
     except Exception as e:
         logging.error('Error in get_twitter:')
         logging.error(e)
 
     try:
-        get_youtube(youtube_channels_to_track)
+        get_youtube(youtube_channels_to_track, use_datalake)
     except Exception as e:
         logging.error('Error in get_youtube:')
         logging.error(e)
 
     try:
-        parse_data(keywords)
+        parse_data(keywords, use_datalake, translate)
     except Exception as e:
         logging.error('Error in parse_data:')
         logging.error(e)

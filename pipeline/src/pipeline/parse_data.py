@@ -8,7 +8,7 @@ import numpy as np
 from utils import clean_text, translate_dataframe, geolocate_dataframe, filter_by_keywords, get_blob_service_client
 
 
-def parse_data(keywords):
+def parse_data(keywords, use_datalake, translate):
 
     # load and parse tweets
     twitter_data_path = "./twitter"
@@ -29,7 +29,8 @@ def parse_data(keywords):
     df_tweets['full_text'] = df_tweets.apply(clean_text, args=('full_text',), axis=1)
 
     # translate tweets
-    df_tweets = translate_dataframe(df_tweets, 'full_text')
+    if translate:
+        df_tweets = translate_dataframe(df_tweets, 'full_text')
 
     # filter by keywords
     df_tweets = filter_by_keywords(df_tweets, ['full_text'], keywords)
@@ -45,15 +46,18 @@ def parse_data(keywords):
     df_tweets.to_csv(processed_tweets_path, index=False)
 
     # upload to datalake
-    blob_client = get_blob_service_client('twitter/tweets_latest_processed.csv')
-    with open(processed_tweets_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    if use_datalake:
+        blob_client = get_blob_service_client('twitter/tweets_latest_processed.csv')
+        with open(processed_tweets_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
     # append to existing twitter dataframe
     tweets_all_path = twitter_data_path + "/tweets_all_processed.csv"
     try:
-        with open(tweets_all_path, "wb") as download_file:
-            download_file.write(blob_client.download_blob().readall())
+        if use_datalake:
+            blob_client = get_blob_service_client('twitter/tweets_all_processed.csv')
+            with open(tweets_all_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
         if not os.path.exists(tweets_all_path):
             logging.warning("No older processed tweets found")
         df_old_tweets = pd.read_csv(tweets_all_path, lines=True)
@@ -66,9 +70,9 @@ def parse_data(keywords):
     df_all_tweets.to_csv(tweets_all_path, index=False)
 
     # upload to datalake
-    blob_client = get_blob_service_client('twitter/tweets_all_processed.csv')
-    with open(tweets_all_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    if use_datalake:
+        with open(tweets_all_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
     ####################################################################################################################
 
@@ -76,25 +80,13 @@ def parse_data(keywords):
     youtube_data_path = "./youtube"
     videos_path = youtube_data_path + "/videos_latest.csv"
     df_videos = pd.read_csv(videos_path)
-    df_videos['user'] = df_videos['user'].astype(str).apply(ast.literal_eval)
-    df_videos['source'] = df_videos['user'].apply(lambda x: x['name'])
-    df_videos['screen_name'] = df_videos['user'].apply(lambda x: x['screen_name'])
-    df_videos['entities'] = df_videos['entities'].astype(str).apply(ast.literal_eval)
-    df_videos['url'] = df_videos['entities'].apply(get_url_from_entities)
-    df_videos['youtube_url'] = df_videos.apply(get_url_from_tweet, axis=1)
-    df_videos['url'] = df_videos['url'].fillna(df_videos['youtube_url'])
-    df_videos = df_videos.drop(columns={'entities', 'screen_name', 'youtube_url', 'user', 'extended_entities'})
 
-    # if retweet, get full text of original tweet
-    df_videos['full_text'] = df_videos.apply(get_retweet, axis=1)
-    # clean text (if in english)
-    df_videos['full_text'] = df_videos.apply(clean_text, args=('full_text',), axis=1)
-
-    # translate videos
-    df_videos = translate_dataframe(df_videos, 'full_text')
+    # translate videos title
+    if translate:
+        df_videos = translate_dataframe(df_videos, 'title')
 
     # filter by keywords
-    df_videos = filter_by_keywords(df_videos, ['full_text'], keywords)
+    df_videos = filter_by_keywords(df_videos, ['title'], keywords)
     out_dir_filter = 'videos_processed/videos_latest_filtered.csv'
     df_videos.to_csv(out_dir_filter, index=False)
 
@@ -107,15 +99,18 @@ def parse_data(keywords):
     df_videos.to_csv(processed_videos_path, index=False)
 
     # upload to datalake
-    blob_client = get_blob_service_client('youtube/videos_latest_processed.csv')
-    with open(processed_videos_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    if use_datalake:
+        blob_client = get_blob_service_client('youtube/videos_latest_processed.csv')
+        with open(processed_videos_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
     # append to existing twitter dataframe
     videos_all_path = twitter_data_path + "/videos_all_processed.csv"
     try:
-        with open(videos_all_path, "wb") as download_file:
-            download_file.write(blob_client.download_blob().readall())
+        if use_datalake:
+            blob_client = get_blob_service_client('youtube/videos_all_processed.csv')
+            with open(videos_all_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
         if not os.path.exists(videos_all_path):
             logging.warning("No older processed videos found")
             df_old_videos = pd.read_csv(videos_all_path, lines=True)
@@ -128,9 +123,9 @@ def parse_data(keywords):
     df_all_videos.to_csv(videos_all_path, index=False)
 
     # upload to datalake
-    blob_client = get_blob_service_client('youtube/videos_all_processed.csv')
-    with open(videos_all_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    if use_datalake:
+        with open(videos_all_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
     ####################################################################################################################
 
@@ -144,7 +139,8 @@ def parse_data(keywords):
     df_merged.to_csv(merged_path, index=False)
 
     # upload to datalake
-    blob_client = get_blob_service_client('merged/merged_all.csv')
-    with open(merged_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    if use_datalake:
+        blob_client = get_blob_service_client('merged/merged_all.csv')
+        with open(merged_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
