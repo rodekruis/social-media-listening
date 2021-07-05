@@ -18,7 +18,7 @@ except ImportError:
     import simplejson as json
 
 
-def get_twitter(tw_users):
+def get_twitter(tw_users, use_datalake):
 
     # initialize twitter API
     with open("credentials/twitter_secrets.json") as file:
@@ -73,18 +73,23 @@ def get_twitter(tw_users):
     # drop duplicates
     df_tweets = df_tweets.drop_duplicates(subset=['id'])
 
-    # upload to datalake
+    # save
     tweets_path = twitter_data_path + "/tweets_latest.csv"
     df_tweets.to_csv(tweets_path, index=False)
-    blob_client = get_blob_service_client('twitter/tweets_latest.csv')
-    with open(tweets_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+
+    # upload to datalake
+    if use_datalake:
+        blob_client = get_blob_service_client('twitter/tweets_latest.csv')
+        with open(tweets_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
     # append to existing twitter dataframe
     tweets_all_path = twitter_data_path + "/tweets_all.csv"
     try:
-        with open(tweets_all_path, "wb") as download_file:
-            download_file.write(blob_client.download_blob().readall())
+        if use_datalake:
+            blob_client = get_blob_service_client('twitter/tweets_all.csv')
+            with open(tweets_all_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
         if not os.path.exists(tweets_all_path):
             logging.warning("No older tweets found")
         df_old_tweets = pd.read_csv(tweets_all_path, lines=True)
@@ -97,9 +102,9 @@ def get_twitter(tw_users):
     df_all_tweets.to_csv(tweets_all_path, index=False)
 
     # upload to datalake
-    blob_client = get_blob_service_client('twitter/tweets_all.csv')
-    with open(tweets_all_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    if use_datalake:
+        with open(tweets_all_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
 
 def get_youtube(channel_ids):
@@ -157,20 +162,25 @@ def get_youtube(channel_ids):
                 'lang': 'unknown'
             }), ignore_index=True)
 
-    # append to existing videos dataframe
+    # save
     youtube_data_path = "./youtube"
     os.makedirs(youtube_data_path, exist_ok=True)
     videos_path = youtube_data_path + "/videos_latest.csv"
     df_videos.to_csv(videos_path, index=False)
-    blob_client = get_blob_service_client('youtube/videos_latest.csv')
-    with open(videos_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+
+    # upload to datalake
+    if use_datalake:
+        blob_client = get_blob_service_client('youtube/videos_latest.csv')
+        with open(videos_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
     # append to existing twitter dataframe
     videos_all_path = twitter_data_path + "/videos_all.csv"
     try:
-        with open(videos_all_path, "wb") as download_file:
-            download_file.write(blob_client.download_blob().readall())
+        if use_datalake:
+            blob_client = get_blob_service_client('youtube/videos_all.csv')
+            with open(videos_all_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
         if not os.path.exists(videos_all_path):
             logging.warning("No older videos found")
         df_old_videos = pd.read_csv(videos_all_path, lines=True)
@@ -182,10 +192,10 @@ def get_youtube(channel_ids):
     df_all_videos = df_all_videos.drop_duplicates(subset=['id'])
     df_all_videos.to_csv(videos_all_path, index=False)
 
-    # upload the new videos dataframe
-    blob_client = get_blob_service_client('youtube/videos_all.csv')
-    with open(videos_all_path, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    # upload to datalake
+    if use_datalake:
+        with open(videos_all_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
 
 
