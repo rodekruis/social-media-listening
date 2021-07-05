@@ -1,1 +1,2 @@
-# eth-conflict-news-tracker
+# news-tracker-ethiopia
+
