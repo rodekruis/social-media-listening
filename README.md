@@ -6,15 +6,15 @@ Built to support Ethiopian Red Cross Society (ERCS).
 
 ## Setup
 Generic requirements:
--   [Google Cloud account](https://cloud.google.com/)
 -   [Twitter developer account](https://developer.twitter.com/en/apply-for-access)
--   [Azure account](https://azure.microsoft.com/en-us/get-started/) and 
+-   OPTIONAL (translate): [Google Cloud account](https://cloud.google.com/)
+-   OPTIONAL (upload to Azure datalake): [Azure account](https://azure.microsoft.com/en-us/get-started/) and 
 
-For 510: Google cloud service account accessible [here](https://console.cloud.google.com/apis/credentials?project=eth-conflict-tracker&folder=&organizationId=&supportedpurview=project), login credentials in Bitwarden
+For 510: Google cloud service account credentials are accessible [here](https://console.cloud.google.com/apis/credentials?project=eth-conflict-tracker&folder=&organizationId=&supportedpurview=project), login credentials in Bitwarden
 
 ### with Docker
 1. Install [Docker](https://www.docker.com/get-started)
-3. Download vector input data from [here](https://rodekruis.sharepoint.com/sites/510-CRAVK-510/_layouts/15/guestaccess.aspx?docid=01fe7b3505b0440229856228d6210044c&authkey=Acr_sCnyg7cKHmMUw0ay1C8&expiration=2022-03-21T23%3A00%3A00.000Z&e=ciWvIh) and move it to
+3. Download vector input data from [here](https://rodekruis.sharepoint.com/sites/510-CRAVK-510/_layouts/15/guestaccess.aspx?docid=09ee1386e97b54b7cbd9399c730181efa&authkey=AelH_jSEguHCrGEp5gh2oyI&expiration=2022-07-04T22%3A00%3A00.000Z&e=OBsIge), unzip and move it to
 ```
 vector/
 ```
@@ -30,7 +30,7 @@ docker build -t rodekruis/news-tracker-ethiopia .
 ```
 docker run -it --entrypoint /bin/bash rodekruis/news-tracker-ethiopia
 ```
-5. Check that everything is working by running the model (see [Usage](https://github.com/rodekruis/IBF-dengue-model#usage) below)
+5. Check that everything is working by running the pipeline (see [Usage](https://github.com/rodekruis/news-tracker-ethiopia#usage) below)
 
 
 ### Manual Setup
