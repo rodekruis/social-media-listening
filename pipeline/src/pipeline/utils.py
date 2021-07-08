@@ -8,7 +8,6 @@ from google.oauth2 import service_account
 import preprocessor as tp
 from time import sleep
 from requests.exceptions import ReadTimeout, ConnectionError
-import logging
 from shapely.geometry import Polygon, Point
 import geopandas as gpd
 import json
@@ -21,13 +20,14 @@ tqdm.pandas()
 tp.set_options(tp.OPT.URL, tp.OPT.EMOJI, tp.OPT.MENTION)
 en_dict = enchant.Dict("en_US")
 count_translate = 0
+nltk.download('punkt')
 
 
 def get_blob_service_client(blob_path):
-    with open("credentials/blobstorage_secrets.json") as file:
+    with open("../credentials/blobstorage_secrets.json") as file:
         blobstorage_secrets = json.load(file)
     blob_service_client = BlobServiceClient.from_connection_string(blobstorage_secrets['connection_string'])
-    container = blobstorage_secrets['eth-conflict-news-tracker']
+    container = blobstorage_secrets['container']
     return blob_service_client.get_blob_client(container=container, blob=blob_path)
 
 
@@ -94,7 +94,6 @@ def geolocate_dataframe(df_tweets, location_file, adm0_file, location_columns, t
 
     df_tweets = df_tweets.drop(columns=['temp_coord', 'temp_location'])
     count_geolocated = df_tweets.coord.count()
-    logging.info(f'{len(df_tweets)} tweets, {count_geolocated} geo-located')
 
     # filter by country
     gdf_tweets = gpd.GeoDataFrame(df_tweets[~pd.isna(df_tweets.coord)], geometry='coord')
@@ -103,7 +102,6 @@ def geolocate_dataframe(df_tweets, location_file, adm0_file, location_columns, t
     count_geolocated_filtered = gdf_tweets.coord.count()
     if count_geolocated_filtered < count_geolocated:
         df_tweets = df_tweets[df_tweets['id'] not in gdf_tweets.id.tolist()]
-        logging.info(f'---> {count_geolocated-count_geolocated_filtered} tweets removed (not in country)')
 
     df_tweets['longitude'], df_tweets['latitude'] = zip(*df_tweets['coord'].apply(point_to_xy))
     df_tweets = df_tweets.drop(columns=['coord'])
@@ -120,6 +118,24 @@ def clean_text(row_, text_column):
     else:
         text_clean = tp.clean(row_[text_column]).lower()
         return text_clean
+
+
+def html_decode(row_, text_column):
+    """
+    Returns the ASCII decoded version of the given HTML string. This does
+    NOT remove normal HTML tags like <p>.
+    """
+    htmlCodes = (
+            ("'", '&#39;'),
+            ('"', '&quot;'),
+            ('>', '&gt;'),
+            ('<', '&lt;'),
+            ('&', '&amp;')
+        )
+    text = row_[text_column]
+    for code in htmlCodes:
+        text = text.replace(code[1], code[0])
+    return text
 
 
 def translate_string(row_, translate_client, text_field):
@@ -151,7 +167,7 @@ def translate_dataframe(df_tweets, text_column):
     count_translate = 0
 
     # get Google API credentials
-    service_account_info = "credentials/google_service_account_secrets.json"
+    service_account_info = "../credentials/google_service_account_secrets.json"
     credentials = service_account.Credentials.from_service_account_file(service_account_info)
     translate_client = translate.Client(credentials=credentials)
 
@@ -159,9 +175,7 @@ def translate_dataframe(df_tweets, text_column):
     df_texts = df_tweets.drop_duplicates(subset=[text_column])
 
     # translate to english
-    logging.info(f"translate_dataframe: translating {len(df_texts)} entries to english")
     df_texts[text_column] = df_texts.progress_apply(lambda x: translate_string(x, translate_client, text_column), axis=1)
-    logging.info(f"translate_dataframe: translated entries: {count_translate}")
 
     for ix, row in df_tweets.iterrows():
         df_texts_ = df_texts[df_texts['id'] == row['id']]
