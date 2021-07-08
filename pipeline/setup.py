@@ -16,7 +16,7 @@ setuptools.setup(
     version="0.1",
     author="Jacopo Margutti",
     author_email="jmargutti@redcross.nl",
-    description="phl-rumor-tracker pipeline",
+    description="news-tracker",
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
     install_requires=install_requires,

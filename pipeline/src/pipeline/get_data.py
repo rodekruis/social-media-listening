@@ -7,9 +7,9 @@ from requests.packages.urllib3.exceptions import ReadTimeoutError
 import ssl
 import time
 import os
-import logging
-from utils import get_blob_service_client
-logging.basicConfig()
+from google.oauth2 import service_account
+import googleapiclient.discovery
+from pipeline.utils import get_blob_service_client
 
 # -*- coding: utf-8 -*-
 try:
@@ -18,10 +18,10 @@ except ImportError:
     import simplejson as json
 
 
-def get_twitter(tw_users, use_datalake):
+def get_twitter(tw_users, skip_datalake):
 
     # initialize twitter API
-    with open("credentials/twitter_secrets.json") as file:
+    with open("../credentials/twitter_secrets.json") as file:
         twitter_secrets = json.load(file)
     auth = tweepy.OAuthHandler(twitter_secrets['CONSUMER_KEY'], twitter_secrets['CONSUMER_SECRET'])
     auth.set_access_token(twitter_secrets['ACCESS_TOKEN'], twitter_secrets['ACCESS_SECRET'])
@@ -61,8 +61,7 @@ def get_twitter(tw_users, use_datalake):
                     tf.write('\n')
                     json.dump(tweet._json, tf)
             except tweepy.TweepError:
-                logging.warning("Some error occurred, skipping tweet")
-                pass
+                raise
 
     # parse tweets and store in dataframe
     df_tweets = pd.DataFrame()
@@ -75,10 +74,11 @@ def get_twitter(tw_users, use_datalake):
 
     # save
     tweets_path = twitter_data_path + "/tweets_latest.csv"
+    df_tweets = df_tweets
     df_tweets.to_csv(tweets_path, index=False)
 
     # upload to datalake
-    if use_datalake:
+    if not skip_datalake:
         blob_client = get_blob_service_client('twitter/tweets_latest.csv')
         with open(tweets_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
@@ -86,12 +86,10 @@ def get_twitter(tw_users, use_datalake):
     # append to existing twitter dataframe
     tweets_all_path = twitter_data_path + "/tweets_all.csv"
     try:
-        if use_datalake:
+        if not skip_datalake:
             blob_client = get_blob_service_client('twitter/tweets_all.csv')
             with open(tweets_all_path, "wb") as download_file:
                 download_file.write(blob_client.download_blob().readall())
-        if not os.path.exists(tweets_all_path):
-            logging.warning("No older tweets found")
         df_old_tweets = pd.read_csv(tweets_all_path, lines=True)
         df_all_tweets = df_old_tweets.append(df_tweets, ignore_index=True)
     except:
@@ -102,19 +100,19 @@ def get_twitter(tw_users, use_datalake):
     df_all_tweets.to_csv(tweets_all_path, index=False)
 
     # upload to datalake
-    if use_datalake:
+    if not skip_datalake:
         with open(tweets_all_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
 
-def get_youtube(channel_ids):
+def get_youtube(channel_ids, skip_datalake):
     # Disable OAuthlib's HTTPS verification when running locally.
     # *DO NOT* leave this option enabled in production.
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
     scopes = ["https://www.googleapis.com/auth/youtube.force-ssl"]
     api_service_name = "youtube"
     api_version = "v3"
-    service_account_info = "credentials/google_service_account_secrets.json"
+    service_account_info = "../credentials/google_service_account_secrets.json"
 
     # Get credentials and create an API client
     credentials = service_account.Credentials.from_service_account_file(service_account_info)
@@ -166,23 +164,22 @@ def get_youtube(channel_ids):
     youtube_data_path = "./youtube"
     os.makedirs(youtube_data_path, exist_ok=True)
     videos_path = youtube_data_path + "/videos_latest.csv"
+    df_videos = df_videos
     df_videos.to_csv(videos_path, index=False)
 
     # upload to datalake
-    if use_datalake:
+    if not skip_datalake:
         blob_client = get_blob_service_client('youtube/videos_latest.csv')
         with open(videos_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
     # append to existing twitter dataframe
-    videos_all_path = twitter_data_path + "/videos_all.csv"
+    videos_all_path = youtube_data_path + "/videos_all.csv"
     try:
-        if use_datalake:
+        if not skip_datalake:
             blob_client = get_blob_service_client('youtube/videos_all.csv')
             with open(videos_all_path, "wb") as download_file:
                 download_file.write(blob_client.download_blob().readall())
-        if not os.path.exists(videos_all_path):
-            logging.warning("No older videos found")
         df_old_videos = pd.read_csv(videos_all_path, lines=True)
         df_all_videos = df_old_videos.append(df_videos, ignore_index=True)
     except:
@@ -193,7 +190,7 @@ def get_youtube(channel_ids):
     df_all_videos.to_csv(videos_all_path, index=False)
 
     # upload to datalake
-    if use_datalake:
+    if not skip_datalake:
         with open(videos_all_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
