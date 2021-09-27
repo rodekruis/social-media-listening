@@ -109,7 +109,6 @@ def get_youtube(channel_ids, skip_datalake):
     # Disable OAuthlib's HTTPS verification when running locally.
     # *DO NOT* leave this option enabled in production.
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-    scopes = ["https://www.googleapis.com/auth/youtube.force-ssl"]
     api_service_name = "youtube"
     api_version = "v3"
     service_account_info = "../credentials/google_service_account_secrets.json"
@@ -139,10 +138,22 @@ def get_youtube(channel_ids, skip_datalake):
                 id=videoId
             )
             response = request.execute()['items'][0]
-            viewCount = response['statistics']['viewCount']
-            likeCount = response['statistics']['likeCount']
-            dislikeCount = response['statistics']['dislikeCount']
-            commentCount = response['statistics']['commentCount']
+            if 'viewCount' in response['statistics'].keys():
+                viewCount = response['statistics']['viewCount']
+            else:
+                viewCount = None
+            if 'likeCount' in response['statistics'].keys():
+                likeCount = response['statistics']['likeCount']
+            else:
+                likeCount = None
+            if 'dislikeCount' in response['statistics'].keys():
+                dislikeCount = response['statistics']['dislikeCount']
+            else:
+                dislikeCount = None
+            if 'commentCount' in response['statistics'].keys():
+                commentCount = response['statistics']['commentCount']
+            else:
+                commentCount = None
             publishedAt = response['snippet']['publishedAt']
             source = response['snippet']['channelTitle']
             url = f"https://www.youtube.com/watch?v={videoId}"
