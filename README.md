@@ -42,16 +42,16 @@ The rumor-tracker can be confgured via one configuration file (json), see countr
 
 ### with Docker
 1. Install [Docker](https://www.docker.com/get-started)
-3. Build the docker image from the root directory
+2. Build the docker image from the root directory
 ```
 docker build -t rodekruis/rumor-tracker .
 ```
-4. Run and access the docker container
+3. Run and access the docker container
 ```
 docker run -it --entrypoint /bin/bash rodekruis/rumor-tracker
 ```
-5. Check that everything is working by running the pipeline (see [Usage](https://github.com/rodekruis/news-tracker-ethiopia#usage) below)
-6. You can now use the rumor-tracker as a dockerized app in your cloud provider, e.g. [Azure Logic App](https://docs.google.com/document/d/182aQPVRZkXifHDNjmE66tj5L1l4IvAt99rxBzpmISPU/edit?usp=sharing)
+4. Check that everything is working by running the pipeline (see [Usage](https://github.com/rodekruis/news-tracker-ethiopia#usage) below)
+5. Congratulations! You can now use the rumor-tracker as a dockerized app in your favorite cloud provider, e.g. [using Azure Logic App](https://docs.google.com/document/d/182aQPVRZkXifHDNjmE66tj5L1l4IvAt99rxBzpmISPU/edit?usp=sharing)
 
 ### Manual Setup
 TBI
