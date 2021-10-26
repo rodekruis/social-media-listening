@@ -34,7 +34,10 @@ def main(config):
         config = json.load(file)
 
     # load credentials
-    load_dotenv(f"../credentials/.env")
+    if all(x in os.environ for x in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"]):
+        pass
+    else:
+        load_dotenv(f"../credentials/.env")
 
     data_to_merge = []
 
