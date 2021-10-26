@@ -46,7 +46,7 @@ The rumor-tracker can be confgured via one configuration file (json), see countr
 ```
 docker build -t rodekruis/rumor-tracker .
 ```
-3. Run and access the docker container
+3. Run the docker image in a new container and access it
 ```
 docker run -it --entrypoint /bin/bash rodekruis/rumor-tracker
 ```
