@@ -1,6 +1,6 @@
 # rumor-tracker
 
-Track specific topic(s) in news and social media, translate them to English, do [sentiment analysis](https://en.wikipedia.org/wiki/Sentiment_analysis), group them in topics.
+Track specific topic(s) in news and social media, translate them to English, [analyze sentiment](https://en.wikipedia.org/wiki/Sentiment_analysis), group them in topics.
 
 Built to support Philippine, Namibia and Ethiopian Red Cross Society.
 
