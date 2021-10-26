@@ -9,7 +9,8 @@ import time
 import os
 from google.oauth2 import service_account
 import googleapiclient.discovery
-from pipeline.utils import get_blob_service_client
+from pipeline.utils import get_blob_service_client, get_secret_keyvault
+import logging
 
 # -*- coding: utf-8 -*-
 try:
@@ -18,11 +19,12 @@ except ImportError:
     import simplejson as json
 
 
-def get_twitter(tw_users, skip_datalake):
+def get_twitter(config):
+    logging.info('getting twitter data')
 
     # initialize twitter API
-    with open("../credentials/twitter_secrets.json") as file:
-        twitter_secrets = json.load(file)
+    twitter_secrets = get_secret_keyvault("twitter-secret", config)
+    twitter_secrets = json.loads(twitter_secrets)
     auth = tweepy.OAuthHandler(twitter_secrets['CONSUMER_KEY'], twitter_secrets['CONSUMER_SECRET'])
     auth.set_access_token(twitter_secrets['ACCESS_TOKEN'], twitter_secrets['ACCESS_SECRET'])
     api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True, compression=True)
@@ -30,38 +32,88 @@ def get_twitter(tw_users, skip_datalake):
     twitter_data_path = "./twitter"
     os.makedirs(twitter_data_path, exist_ok=True)
 
-    for userID in tw_users:
-        # save output as
-        save_file = twitter_data_path + '/tweets_' + userID + '.json'
+    # track individual twitter users
+    if config["track-twitter-users"]:
+        df_twitter_users_to_track = pd.read_csv('../config/tweets_to_track.csv')
+        tw_users = df_twitter_users_to_track.dropna()['user_id'].tolist()
+        if len(tw_users) == 0:
+            raise ValueError("No twitter user specified")
 
-        tweets = api.user_timeline(screen_name=userID,
-                                   count=200,
-                                   include_rts=False,
-                                   tweet_mode='extended'
-                                   )
+        for userID in tw_users:
+            # save output as
+            save_file = twitter_data_path + '/tweets_' + userID + '.json'
 
-        all_tweets = []
-        all_tweets.extend(tweets)
-        oldest_id = tweets[-1].id
-        while True:
             tweets = api.user_timeline(screen_name=userID,
                                        count=200,
                                        include_rts=False,
-                                       max_id=oldest_id - 1,
                                        tweet_mode='extended'
                                        )
-            if len(tweets) == 0:
-                break
-            oldest_id = tweets[-1].id
-            all_tweets.extend(tweets)
 
-        for tweet in all_tweets:
+            all_tweets = []
+            all_tweets.extend(tweets)
+            oldest_id = tweets[-1].id
+            while True:
+                tweets = api.user_timeline(screen_name=userID,
+                                           count=200,
+                                           include_rts=False,
+                                           max_id=oldest_id - 1,
+                                           tweet_mode='extended'
+                                           )
+                if len(tweets) == 0:
+                    break
+                oldest_id = tweets[-1].id
+                all_tweets.extend(tweets)
+
+            with open(save_file, 'a') as tf:
+                for tweet in all_tweets:
+                    try:
+                        tf.write('\n')
+                        json.dump(tweet._json, tf)
+                    except Exception as e:
+                        logging.warning("Some error occurred, skipping tweet:")
+                        logging.warning(e)
+                        pass
+
+    # track specific queries
+    if config["track-twitter-queries"]:
+        save_file = twitter_data_path + '/tweets_queries.json'
+        queries = config["twitter-queries"]
+        if len(queries) == 0:
+            raise ValueError("No twitter query specified")
+        all_tweets = []
+        # loop over queries and search
+        for query in queries:
+            n = 0
             try:
-                with open(save_file, 'a') as tf:
+                for page in tweepy.Cursor(api.search,
+                                          q=query,
+                                          tweet_mode='extended',
+                                          include_entities=True,
+                                          max_results=100).pages():
+                    # logging.info('processing page {0}'.format(n))
+                    try:
+                        for tweet in page:
+                            all_tweets.append(tweet)
+                    except Exception as e:
+                        logging.warning("Some error occurred, skipping page {0}:".format(n))
+                        logging.warning(e)
+                        pass
+                    n += 1
+            except Exception as e:
+                logging.warning("Some error occurred, skipping query {0}:".format(query))
+                logging.warning(e)
+                pass
+
+        with open(save_file, 'a') as tf:
+            for tweet in all_tweets:
+                try:
                     tf.write('\n')
                     json.dump(tweet._json, tf)
-            except tweepy.TweepError:
-                raise
+                except Exception as e:
+                    logging.warning("Some error occurred, skipping tweet:")
+                    logging.warning(e)
+                    pass
+
 
     # parse tweets and store in dataframe
     df_tweets = pd.DataFrame()
@@ -78,16 +130,16 @@ def get_twitter(tw_users, skip_datalake):
     df_tweets.to_csv(tweets_path, index=False)
 
     # upload to datalake
-    if not skip_datalake:
-        blob_client = get_blob_service_client('twitter/tweets_latest.csv')
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client('twitter/tweets_latest.csv', config)
         with open(tweets_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
     # append to existing twitter dataframe
     tweets_all_path = twitter_data_path + "/tweets_all.csv"
     try:
-        if not skip_datalake:
-            blob_client = get_blob_service_client('twitter/tweets_all.csv')
+        if not config["skip-datalake"]:
+            blob_client = get_blob_service_client('twitter/tweets_all.csv', config)
             with open(tweets_all_path, "wb") as download_file:
                 download_file.write(blob_client.download_blob().readall())
         df_old_tweets = pd.read_csv(tweets_all_path, lines=True)
@@ -100,21 +152,24 @@ def get_twitter(tw_users, skip_datalake):
     df_all_tweets.to_csv(tweets_all_path, index=False)
 
     # upload to datalake
-    if not skip_datalake:
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client('twitter/tweets_all.csv', config)
         with open(tweets_all_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
 
-def get_youtube(channel_ids, skip_datalake):
-    # Disable OAuthlib's HTTPS verification when running locally.
-    # *DO NOT* leave this option enabled in production.
-    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+def get_youtube(config):
+
+    df_youtube_channels_to_track = pd.read_csv('../config/youtube_to_track.csv')
+    channel_ids = df_youtube_channels_to_track.dropna()['channel_id'].tolist()
+    if len(channel_ids) == 0:
+        raise ValueError("No youtube channel specified")
+
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1" # Disable OAuthlib's HTTPS verification
     api_service_name = "youtube"
     api_version = "v3"
-    service_account_info = "../credentials/google_service_account_secrets.json"
-
-    # Get credentials and create an API client
-    credentials = service_account.Credentials.from_service_account_file(service_account_info)
+    service_account_info = get_secret_keyvault('google-secret', config)
+    credentials = service_account.Credentials.from_service_account_info(json.loads(service_account_info))
     youtube = googleapiclient.discovery.build(
         api_service_name, api_version, credentials=credentials)
 
@@ -158,7 +213,7 @@ def get_youtube(channel_ids, skip_datalake):
             source = response['snippet']['channelTitle']
             url = f"https://www.youtube.com/watch?v={videoId}"
             df_videos = df_videos.append(pd.Series({
-                'title': title,
+                'full_text': title,
                 'description': description,
                 'id': videoId,
                 'source': source,
@@ -179,16 +234,16 @@ def get_youtube(channel_ids, skip_datalake):
     df_videos.to_csv(videos_path, index=False)
 
     # upload to datalake
-    if not skip_datalake:
-        blob_client = get_blob_service_client('youtube/videos_latest.csv')
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client('youtube/videos_latest.csv', config)
         with open(videos_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
     # append to existing twitter dataframe
     videos_all_path = youtube_data_path + "/videos_all.csv"
     try:
-        if not skip_datalake:
-            blob_client = get_blob_service_client('youtube/videos_all.csv')
+        if not config["skip-datalake"]:
+            blob_client = get_blob_service_client('youtube/videos_all.csv', config)
             with open(videos_all_path, "wb") as download_file:
                 download_file.write(blob_client.download_blob().readall())
         df_old_videos = pd.read_csv(videos_all_path, lines=True)
@@ -201,7 +256,8 @@ def get_youtube(channel_ids, skip_datalake):
     df_all_videos.to_csv(videos_all_path, index=False)
 
     # upload to datalake
-    if not skip_datalake:
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client('youtube/videos_all.csv', config)
         with open(videos_all_path, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 

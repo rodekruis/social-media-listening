@@ -17,7 +17,6 @@ RUN pip install --upgrade pip && \
 
 ADD config /config
 ADD credentials /credentials
-ADD vector /vector
 
 WORKDIR /pipeline
 ADD pipeline .

@@ -14,9 +14,9 @@ PROJECT_NAME = "pipeline"
 setuptools.setup(
     name=PROJECT_NAME,
     version="0.1",
-    author="Jacopo Margutti",
-    author_email="jmargutti@redcross.nl",
-    description="news-tracker",
+    author="Jacopo Margutti, Phuoc Phùng",
+    author_email="jmargutti@redcross.nl, pphung@redcross.nl",
+    description="rumor-tracker",
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
     install_requires=install_requires,
