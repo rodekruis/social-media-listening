@@ -1,8 +1,10 @@
 # rumor-tracker
 
-Track specific topic(s) in news and social media, translate them to English and do [sentiment analysis](https://en.wikipedia.org/wiki/Sentiment_analysis).
+Track specific topic(s) in news and social media, translate them to English, do [sentiment analysis](https://en.wikipedia.org/wiki/Sentiment_analysis), group them in topics.
 
 Built to support Philippine, Namibia and Ethiopian Red Cross Society.
+
+Credits: [Phuoc Phung](https://github.com/p-phung), [Jacopo Margutti](https://github.com/jmargutt)
 
 ## Introduction
 This repo contains the code to:
@@ -12,7 +14,7 @@ This repo contains the code to:
 4. Divide it into topics
 5. Assign a topic and a representative example to each group
 
-Built on top of [GSDMM: short text clustering](https://github.com/rwalk/gsdmm) and [Google Cloud Natural Language](https://cloud.google.com/natural-language).
+Topic modelling is built on top of [GSDMM: short text clustering](https://github.com/rwalk/gsdmm), while sentiment and translation use [Google Cloud Natural Language](https://cloud.google.com/natural-language).
 
 N.B. the creation of groups (a.k.a. clustering) is automated, but the topic description is not. You need a human to read some representative examples of each group and come up 
 with a meaningful, human-readable description.
@@ -25,17 +27,17 @@ Data sources supported by the rumor-tracker:
 
 ## Setup
 Generic requirements:
--   [Twitter developer account](https://developer.twitter.com/en/apply-for-access)
 -   [Azure Key Vault](https://azure.microsoft.com/en-us/services/key-vault/)
 -   [Azure Data Lake Storage](https://docs.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-introduction)
+-   OPTIONAL (Twitter): [Twitter developer account](https://developer.twitter.com/en/apply-for-access)
 -   OPTIONAL (geolocate): vector files of locations and country boundaries
--   OPTIONAL (translate): [Google Cloud account](https://cloud.google.com/)
+-   OPTIONAL (YouTube, translate): [Google Cloud account](https://cloud.google.com/)
 
 More in detail:
-- Follow [these instructions](https://docs.google.com/document/d/1q6h5zYDFLMaWDGBfSEe0EGl8Ymi09WhuqpHPxnQy6DU/edit?usp=sharing) to store credentials in Azure Key Vault and use them with the rumor-tracker. Secrets need to be in json format and contain all necessary fields, see secrets_template.txt
-- For 510: Google cloud service account credentials are accessible [here](https://console.cloud.google.com/apis/credentials?project=eth-conflict-tracker&folder=&organizationId=&supportedpurview=project), but create a new project if needed!. Login credentials in Bitwarden
+- Follow [these instructions](https://docs.google.com/document/d/1q6h5zYDFLMaWDGBfSEe0EGl8Ymi09WhuqpHPxnQy6DU/edit?usp=sharing) to store credentials in Azure Key Vault and use them with the rumor-tracker. Secrets need to be in json format and contain all necessary fields, templates TBI
+- For 510: Google cloud service account credentials are accessible [here](https://console.cloud.google.com/apis/credentials?project=eth-conflict-tracker&folder=&organizationId=&supportedpurview=project), but create a new project if needed!. Login credentials in Bitwarden.
 
-The rumor-tracker in confgured via one configuration file, which is structured structured as follows
+The rumor-tracker can be confgured via one configuration file (json), see country-specific examples under [config](https://github.com/rodekruis/rumor-tracker/tree/master/config)
 
 ### with Docker
 1. Install [Docker](https://www.docker.com/get-started)
