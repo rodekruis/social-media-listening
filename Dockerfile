@@ -8,7 +8,7 @@ RUN apt-get update && \
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
 
-RUN deps='build-essential gdal-bin python-gdal libgdal-dev kmod wget apache2 libenchant1c2a' && \
+RUN deps='build-essential gdal-bin python-gdal libgdal-dev kmod wget apache2 libenchant1c2a libspatialindex-dev' && \
 	apt-get update && \
 	apt-get install -y $deps
 
