@@ -16,7 +16,7 @@
   "analyse-sentiment": true,
   "analyse-topic": true,
   "model-filename": "gsdmm-model-v1.pickle",
-  "keys-to-topics-filename": "keys-to-topics-v0.1.csv",
+  "keys-to-topics-filename": "keys-to-topics-v0.2.csv",
   "keyvault-url": "https://global-covid-keys.vault.azure.net",
   "twitter-secret": "nam-rumor-tracker-twitter-secret",
   "blobstorage-secret": "nam-rumor-tracker-blobstorage",
