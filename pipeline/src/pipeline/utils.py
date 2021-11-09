@@ -151,6 +151,7 @@ def point_to_xy(point):
 def geolocate_dataframe(df_tweets, location_file, adm0_file,
                         location_input, location_output,
                         target, config, tw_place_column=""):
+    logging.info("geolocating")
 
     # download geodata if not present
     if not os.path.exists(location_file):
@@ -165,6 +166,9 @@ def geolocate_dataframe(df_tweets, location_file, adm0_file,
     # select locations
     gdf = gpd.read_file(location_file, encoding='utf8')
     for loc_col in location_input:
+        if loc_col not in gdf.columns:
+            logging.warning(f"{loc_col} not in location file {location_file}, check config")
+            continue
         gdf['is_english'] = gdf[loc_col].apply(en_dict.check)
         gdf = gdf[~gdf['is_english']].drop(columns=['is_english'])
         gdf[loc_col] = gdf[loc_col].str.lower()
@@ -177,10 +181,11 @@ def geolocate_dataframe(df_tweets, location_file, adm0_file,
     else:
         df_tweets['coord'] = np.nan
 
-    logging.info("geolocating")
-    locations = [loc.lower() for loc in gdf[loc_col].values]
     # search for locations
     for loc_col in location_input:
+        if loc_col not in gdf.columns:
+            continue
+        locations = [loc.lower() for loc in gdf[loc_col].values]
         for target_col in target:
             df_tweets['temp_coord'], df_tweets['temp_location'] = \
                 zip(*df_tweets.progress_apply(lambda x: match_location(x, gdf, target_col, loc_col, locations), axis=1))

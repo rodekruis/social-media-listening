@@ -5,6 +5,7 @@ from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, merge_
 import logging
 import click
 import json
+import yaml
 from dotenv import load_dotenv
 logging.root.handlers = []
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG, filename='ex.log')
@@ -30,7 +31,10 @@ def main(config):
 
     # load configuration
     with open(f"../config/{config}") as file:
-        config = json.load(file)
+        if config.endswith('json'):
+            config = json.load(file)
+        elif config.endswith('yaml'):
+            config = yaml.load(file, Loader=yaml.FullLoader)
 
     # load credentials
     if all(x in os.environ for x in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"]):
