@@ -1,12 +1,9 @@
-from azure.storage.blob import BlobServiceClient, BlobClient
 import os
-import ssl
 import ast
 import pandas as pd
 import numpy as np
-import json
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, filter_by_keywords, \
-    get_blob_service_client, html_decode, predict_topic, predict_sentiment
+    get_blob_service_client, html_decode, predict_topic, predict_sentiment, save_data
 import logging
 
 
@@ -29,6 +26,50 @@ def get_url_from_entities(entities):
 
 def get_url_from_tweet(row):
     return f"https://twitter.com/{row['screen_name']}/status/{row['id']}"
+
+
+def parse_kobo(config):
+
+    # load and parse tweets
+    kobo_data_path = "./kobo"
+    form_data_path = kobo_data_path + "/form_data_latest.csv"
+    df_kobo = pd.read_csv(form_data_path)
+    next_text_value = config["text-field-kobo-form"]
+    if next_text_value not in df_kobo.columns:
+        raise ValueError("text-field-kobo-form not in kobo form data, check config")
+
+    # translate tweets
+    if config["translate"]:
+        df_kobo = translate_dataframe(df_kobo, next_text_value, 'full_text_en', config)
+        next_text_value = 'full_text_en'
+
+    # filter by keywords
+    if config["filter-by-keywords"]:
+        df_keywords = pd.read_csv('../config/keywords.csv')
+        keywords = df_keywords.dropna()['keyword'].tolist()
+        df_kobo = filter_by_keywords(df_kobo, [next_text_value], keywords)
+
+    # geolocate
+    if config["geolocate"]:
+        df_kobo = geolocate_dataframe(df_kobo,
+                                      config['geodata-locations'],
+                                      config['geodata-country-boundaries'],
+                                      config['location-input'],
+                                      config['location-output'],
+                                      [next_text_value],
+                                      config,
+                                      'place')
+
+    # sentiment analysis
+    if config["analyse-sentiment"]:
+        df_kobo = predict_sentiment(df_kobo, next_text_value, config)
+
+    # topic analysis
+    if config["analyse-topic"]:
+        df_kobo = predict_topic(df_kobo, next_text_value, config)
+
+    save_data("form_data_processed", "kobo", df_kobo, "_id", config)
+    return "./kobo/form_data_processed_all.csv"
 
 
 def parse_twitter(config):
@@ -63,8 +104,6 @@ def parse_twitter(config):
         keywords = df_keywords.dropna()['keyword'].tolist()
         df_tweets = filter_by_keywords(df_tweets, [next_text_value], keywords)
 
-    df_tweets.to_csv('tweets_translated.csv')
-
     # geolocate
     if config["geolocate"]:
         df_tweets = geolocate_dataframe(df_tweets,
@@ -95,38 +134,8 @@ def parse_twitter(config):
         if col in df_tweets.columns:
             df_tweets = df_tweets.drop(columns=[col])
 
-    # save processed tweets
-    processed_tweets_path = twitter_data_path + "/tweets_latest_processed.csv"
-    df_tweets.to_csv(processed_tweets_path, index=False)
-
-    # upload to datalake
-    if not config['skip-datalake']:
-        blob_client = get_blob_service_client('twitter/tweets_latest_processed.csv', config)
-        with open(processed_tweets_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-
-    # append to existing twitter dataframe
-    tweets_all_path = twitter_data_path + "/tweets_all_processed.csv"
-    try:
-        if not config['skip-datalake']:
-            blob_client = get_blob_service_client('twitter/tweets_all_processed.csv', config)
-            with open(tweets_all_path, "wb") as download_file:
-                download_file.write(blob_client.download_blob().readall())
-        df_old_tweets = pd.read_csv(tweets_all_path, lines=True)
-        df_all_tweets = df_old_tweets.append(df_tweets, ignore_index=True)
-    except:
-        df_all_tweets = df_tweets.copy()
-
-    # drop duplicates and save
-    df_all_tweets = df_all_tweets.drop_duplicates(subset=['id'])
-    df_all_tweets.to_csv(tweets_all_path, index=False)
-
-    # upload to datalake
-    if not config['skip-datalake']:
-        blob_client = get_blob_service_client('twitter/tweets_all_processed.csv', config)
-        with open(tweets_all_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-    return tweets_all_path
+    save_data("tweets_processed", "twitter", df_tweets, "id", config)
+    return "./twitter/tweets_processed_all.csv"
 
 
 def parse_youtube(config):
@@ -159,38 +168,8 @@ def parse_youtube(config):
                                         [next_text_value],
                                         config)
 
-    # save processed videos
-    processed_videos_path = youtube_data_path + "/videos_latest_processed.csv"
-    df_videos.to_csv(processed_videos_path, index=False)
-
-    # upload to datalake
-    if not config['skip-datalake']:
-        blob_client = get_blob_service_client('youtube/videos_latest_processed.csv', config)
-        with open(processed_videos_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-
-    # append to existing youtube dataframe
-    videos_all_path = youtube_data_path + "/videos_all_processed.csv"
-    try:
-        if not config['skip-datalake']:
-            blob_client = get_blob_service_client('youtube/videos_all_processed.csv', config)
-            with open(videos_all_path, "wb") as download_file:
-                download_file.write(blob_client.download_blob().readall())
-        df_old_videos = pd.read_csv(videos_all_path, lines=True)
-        df_all_videos = df_old_videos.append(df_videos, ignore_index=True)
-    except:
-        df_all_videos = df_videos.copy()
-
-    # drop duplicates and save
-    df_all_videos = df_all_videos.drop_duplicates(subset=['id'])
-    df_all_videos.to_csv(videos_all_path, index=False)
-
-    # upload to datalake
-    if not config['skip-datalake']:
-        blob_client = get_blob_service_client('youtube/videos_all_processed.csv', config)
-        with open(videos_all_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-    return videos_all_path
+    save_data("videos_processed", "youtube", df_videos, "id", config)
+    return "./youtube/videos_processed_all.csv"
 
 
 def merge_sources(data_to_merge, config):

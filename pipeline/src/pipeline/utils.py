@@ -1,16 +1,11 @@
 import preprocessor as tp
 import pandas as pd
 import numpy as np
-from numpy.random import multinomial
-from numpy import log, exp
-from numpy import argmax
 import os
-import random
 import operator
 import gensim
 from google.cloud import language_v1
 from google.cloud import translate_v2 as translate
-from apiclient import discovery
 from google.oauth2 import service_account
 from time import sleep
 from requests.exceptions import ReadTimeout, ConnectionError
@@ -18,7 +13,7 @@ from shapely.geometry import Polygon, Point
 import geopandas as gpd
 import json
 import enchant
-from nltk.stem import WordNetLemmatizer, SnowballStemmer
+from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import *
 np.random.seed(2018)
 import nltk
@@ -39,9 +34,8 @@ STOPWORDS.append('because')
 STOPWORDS.append('like')
 STOPWORDS.append('get')
 from pipeline.GSDMM import MovieGroupProcess
-from datetime import timedelta, date
 import ast
-from azure.storage.blob import BlobServiceClient, BlobClient
+from azure.storage.blob import BlobServiceClient
 from tqdm import tqdm
 tqdm.pandas()
 tp.set_options(tp.OPT.URL, tp.OPT.EMOJI, tp.OPT.MENTION)
@@ -61,6 +55,7 @@ def get_secret_keyvault(secret_name, config):
     kv_secretClient = SecretClient(vault_url=kv_url, credential=az_credential)
     secret_value = kv_secretClient.get_secret(config[secret_name]).value
     return secret_value
+
 
 class BreakIt(Exception):
     pass
@@ -454,6 +449,46 @@ def predict_topic(df_tweets, text_column, config):
 
     return df_tweets
 
+
+def save_data(name, directory, data, id, config):
+    """
+    both locally and on the cloud:
+    1. save data as {directory}/{name}_latest.csv and append to {directory}/{name}_all.csv
+    2. drop duplicates in {directory}/{name}_all.csv based on {id}
+    3. save {directory}/{name}_all.csv
+    """
+
+    os.makedirs(f"./{directory}", exist_ok=True)
+    tweets_path = f"./{directory}/{name}_latest.csv"
+    data.to_csv(tweets_path, index=False)
+
+    # upload to datalake
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client(f'{directory}/{name}_latest.csv', config)
+        with open(tweets_path, "rb") as upload_file:
+            blob_client.upload_blob(upload_file, overwrite=True)
+
+    # append to existing twitter dataframe
+    data_all_path = f"./{directory}/{name}_all.csv"
+    try:
+        if not config["skip-datalake"]:
+            blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
+            with open(data_all_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
+        data_old = pd.read_csv(data_all_path, lines=True)
+        data_all = data_old.append(data, ignore_index=True)
+    except:
+        data_all = data.copy()
+
+    # drop duplicates and save
+    data_all = data_all.drop_duplicates(subset=[id])
+    data_all.to_csv(data_all_path, index=False)
+
+    # upload to datalake
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
+        with open(data_all_path, "rb") as upload_file:
+            blob_client.upload_blob(upload_file, overwrite=True)
 
 
 

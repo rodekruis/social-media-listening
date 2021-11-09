@@ -1,8 +1,7 @@
 import datetime
 import os, traceback, sys
-from pipeline.get_data import get_twitter, get_youtube
-from pipeline.parse_data import parse_twitter, parse_youtube, merge_sources
-import pandas as pd
+from pipeline.get_data import get_twitter, get_youtube, get_kobo
+from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, merge_sources
 import logging
 import click
 import json
@@ -42,6 +41,19 @@ def main(config):
     data_to_merge = []
 
     # execute pipeline
+    if config["track-kobo-form"]:
+        try:
+            get_kobo(config)
+        except Exception as e:
+            logging.error(f"in getting kobo data: {e}")
+            traceback.print_exception(*sys.exc_info())
+        try:
+            data_kobo = parse_kobo(config)
+            data_to_merge.append(data_kobo)
+        except Exception as e:
+            logging.error(f"in parsing kobo data: {e}")
+            traceback.print_exception(*sys.exc_info())
+
     if config["track-twitter-queries"] or config["track-twitter-users"]:
         try:
             get_twitter(config)
@@ -68,11 +80,14 @@ def main(config):
             logging.error(f"in parsing youtube data: {e}")
             traceback.print_exception(*sys.exc_info())
 
-    try:
-        merge_sources(data_to_merge, config)
-    except Exception as e:
-        logging.error(f"in merging data: {e}")
-        traceback.print_exception(*sys.exc_info())
+    if len(data_to_merge) > 0:
+        try:
+            merge_sources(data_to_merge, config)
+        except Exception as e:
+            logging.error(f"in merging data: {e}")
+            traceback.print_exception(*sys.exc_info())
+    else:
+        logging.warning('No data to merge, skipping')
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
 

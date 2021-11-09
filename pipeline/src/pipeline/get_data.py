@@ -1,15 +1,10 @@
-import datetime
-from azure.storage.blob import BlobServiceClient, BlobClient
 import tweepy
 import pandas as pd
-from requests.exceptions import Timeout, ConnectionError
-from requests.packages.urllib3.exceptions import ReadTimeoutError
-import ssl
-import time
+import requests
 import os
 from google.oauth2 import service_account
 import googleapiclient.discovery
-from pipeline.utils import get_blob_service_client, get_secret_keyvault
+from pipeline.utils import get_blob_service_client, get_secret_keyvault, save_data
 import logging
 
 # -*- coding: utf-8 -*-
@@ -124,38 +119,7 @@ def get_twitter(config):
     # drop duplicates
     df_tweets = df_tweets.drop_duplicates(subset=['id'])
 
-    # save
-    tweets_path = twitter_data_path + "/tweets_latest.csv"
-    df_tweets = df_tweets
-    df_tweets.to_csv(tweets_path, index=False)
-
-    # upload to datalake
-    if not config["skip-datalake"]:
-        blob_client = get_blob_service_client('twitter/tweets_latest.csv', config)
-        with open(tweets_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-
-    # append to existing twitter dataframe
-    tweets_all_path = twitter_data_path + "/tweets_all.csv"
-    try:
-        if not config["skip-datalake"]:
-            blob_client = get_blob_service_client('twitter/tweets_all.csv', config)
-            with open(tweets_all_path, "wb") as download_file:
-                download_file.write(blob_client.download_blob().readall())
-        df_old_tweets = pd.read_csv(tweets_all_path, lines=True)
-        df_all_tweets = df_old_tweets.append(df_tweets, ignore_index=True)
-    except:
-        df_all_tweets = df_tweets.copy()
-
-    # drop duplicates and save
-    df_all_tweets = df_all_tweets.drop_duplicates(subset=['id'])
-    df_all_tweets.to_csv(tweets_all_path, index=False)
-
-    # upload to datalake
-    if not config["skip-datalake"]:
-        blob_client = get_blob_service_client('twitter/tweets_all.csv', config)
-        with open(tweets_all_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
+    save_data("tweets", "twitter", df_tweets, "id", config)
 
 
 def get_youtube(config):
@@ -226,40 +190,18 @@ def get_youtube(config):
                 'lang': 'unknown'
             }), ignore_index=True)
 
-    # save
-    youtube_data_path = "./youtube"
-    os.makedirs(youtube_data_path, exist_ok=True)
-    videos_path = youtube_data_path + "/videos_latest.csv"
-    df_videos = df_videos
-    df_videos.to_csv(videos_path, index=False)
-
-    # upload to datalake
-    if not config["skip-datalake"]:
-        blob_client = get_blob_service_client('youtube/videos_latest.csv', config)
-        with open(videos_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-
-    # append to existing twitter dataframe
-    videos_all_path = youtube_data_path + "/videos_all.csv"
-    try:
-        if not config["skip-datalake"]:
-            blob_client = get_blob_service_client('youtube/videos_all.csv', config)
-            with open(videos_all_path, "wb") as download_file:
-                download_file.write(blob_client.download_blob().readall())
-        df_old_videos = pd.read_csv(videos_all_path, lines=True)
-        df_all_videos = df_old_videos.append(df_videos, ignore_index=True)
-    except:
-        df_all_videos = df_videos.copy()
-
-    # drop duplicates and save
-    df_all_videos = df_all_videos.drop_duplicates(subset=['id'])
-    df_all_videos.to_csv(videos_all_path, index=False)
-
-    # upload to datalake
-    if not config["skip-datalake"]:
-        blob_client = get_blob_service_client('youtube/videos_all.csv', config)
-        with open(videos_all_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
+    save_data("videos", "youtube", df_videos, "id", config)
 
 
+def get_kobo(config):
+    # get data from kobo
+    kobo_secrets = get_secret_keyvault('kobo-secret', config)
+    kobo_secrets = json.loads(kobo_secrets)
+    headers = {'Authorization': f'Token {kobo_secrets["token"]}'}
+    data_request = requests.get(f'https://kobonew.ifrc.org/api/v2/assets/{kobo_secrets["asset"]}/data.json',
+                                headers=headers)
+    data = data_request.json()['results']
+    df_form = pd.DataFrame(data)
+
+    save_data("form_data", "kobo", df_form, "_id", config)
 
