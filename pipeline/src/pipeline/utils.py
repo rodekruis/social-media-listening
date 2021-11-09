@@ -201,7 +201,7 @@ def geolocate_dataframe(df_tweets, location_file, adm0_file,
     gdf_tweets = gdf_tweets[gdf_tweets.geometry.within(gdf_country.geometry[0])]
     count_geolocated_filtered = gdf_tweets.coord.count()
     if count_geolocated_filtered < count_geolocated:
-        df_tweets = df_tweets[df_tweets['id'] not in gdf_tweets.id.tolist()]
+        df_tweets = df_tweets[df_tweets['id'].isin(gdf_tweets.id.tolist())]
 
     df_tweets['longitude'], df_tweets['latitude'] = zip(*df_tweets['coord'].apply(point_to_xy))
     df_tweets = df_tweets.drop(columns=['coord'])
