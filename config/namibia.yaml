@@ -3,7 +3,7 @@
 # data sources
 track-twitter-queries: true
 twitter-queries:
-  - "covid geocode:-22.1384193,17.22279785,450mi"
+- "covid geocode:-22.1384193,17.22279785,5mi"
 track-twitter-users: false
 track-youtube-channels: false
 track-facebook-page: false
@@ -11,15 +11,17 @@ track-kobo-form: false
 text-field-kobo-form: "test"
 
 # data parsing
-geolocate: true
+geolocate: false
 geodata-locations: "nam_admbnda_adm1_nsa_ocha_20200109.geojson"
 geodata-country-boundaries: "nam_admbnda_adm0_nsa_ocha_20200109.geojson"
 location-input:
   - "ADM1_EN"
 location-output: "ADM1_EN"
 filter-by-keywords: false
-translate: true            # requires Google API
-analyse-sentiment: true    # requires Google API
+translate: true
+translation-model: "Google" #"HuggingFace:Helsinki-NLP/opus-mt-fr-en"
+analyse-sentiment: true
+sentiment-model: "Google" #"HuggingFace:finiteautomata/bertweet-base-sentiment-analysis"
 analyse-topic: true
 model-filename: "gsdmm-model-v1.pickle"
 keys-to-topics-filename: "keys-to-topics-v0.2.csv"
