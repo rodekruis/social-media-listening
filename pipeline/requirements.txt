@@ -69,11 +69,14 @@ reverse-geocoder==1.5.1
 rsa==4.7.2
 rtree==0.9.7
 scipy==1.6.3
+sentencepiece==0.1.96
 setuptools-git==1.2
 shapely==1.7.0
 six==1.16.0
 smart-open==5.0.0
+torch==1.10.0
 tqdm==4.60.0
+transformers==4.13.0
 tweepy==3.10.0
 tweet-preprocessor==0.6.0
 typing-extensions==3.10.0.0

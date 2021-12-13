@@ -13,6 +13,7 @@ from shapely.geometry import Polygon, Point
 import geopandas as gpd
 import json
 import enchant
+import transformers
 from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import *
 np.random.seed(2018)
@@ -40,7 +41,6 @@ from tqdm import tqdm
 tqdm.pandas()
 tp.set_options(tp.OPT.URL, tp.OPT.EMOJI, tp.OPT.MENTION)
 en_dict = enchant.Dict("en_US")
-count_translate = 0
 nltk.download('punkt')
 import logging
 from azure.identity import DefaultAzureCredential
@@ -203,7 +203,10 @@ def geolocate_dataframe(df_tweets, location_file, adm0_file,
     if count_geolocated_filtered < count_geolocated:
         df_tweets = df_tweets[df_tweets['id'].isin(gdf_tweets.id.tolist())]
 
-    df_tweets['longitude'], df_tweets['latitude'] = zip(*df_tweets['coord'].apply(point_to_xy))
+    try:
+        df_tweets['longitude'], df_tweets['latitude'] = zip(*df_tweets['coord'].apply(point_to_xy))
+    except:
+        df_tweets['longitude'], df_tweets['latitude'] = np.nan, np.nan
     df_tweets = df_tweets.drop(columns=['coord'])
     return df_tweets
 
@@ -231,25 +234,29 @@ def html_decode(row_, text_column):
     return text
 
 
-def translate_string(row_, translate_client, text_field):
+def translate_string(row_, translate_client, text_field, model):
     text = row_[text_field]
     if 'lang' in row_.keys():
         lang = row_['lang']
     else:
         lang = 'unknown'
     if lang != 'en':
-        try:
-            result = translate_client.translate(text, target_language="en")
-        except ReadTimeout or ConnectionError:
-            sleep(60)
+        trans = None
+        if model == "Google":
             try:
-                result = translate_client.translate(text, target_language="en")
+                response = translate_client.translate(text, target_language="en")
             except ReadTimeout or ConnectionError:
                 sleep(60)
-                result = translate_client.translate(text, target_language="en")
-        trans = result["translatedText"]
-        global count_translate
-        count_translate += 1
+                try:
+                    response = translate_client.translate(text, target_language="en")
+                except ReadTimeout or ConnectionError:
+                    sleep(60)
+                    response = translate_client.translate(text, target_language="en")
+            trans = response["translatedText"]
+        elif "HuggingFace" in model:
+            response = translate_client(text)[0]
+            trans = response["translation_text"]
+
         if pd.isna(trans):
             return text
         else:
@@ -259,21 +266,29 @@ def translate_string(row_, translate_client, text_field):
 
 
 def translate_dataframe(df_tweets, text_column, text_column_en, config):
-    global count_translate
-    count_translate = 0
 
-    logging.info('translating')
+    model = 'Google'  # default model
+    if 'translation-model' in config.keys():
+        model = config['translation-model']
 
-    # get Google API credentials
-    service_account_info = get_secret_keyvault('google-secret', config)
-    credentials = service_account.Credentials.from_service_account_info(json.loads(service_account_info))
-    translate_client = translate.Client(credentials=credentials)
+    logging.info(f'translating with {model}')
+
+    translate_client = None
+    if model == 'Google':
+        service_account_info = get_secret_keyvault('google-secret', config)
+        credentials = service_account.Credentials.from_service_account_info(json.loads(service_account_info))
+        translate_client = translate.Client(credentials=credentials)
+    elif 'HuggingFace' in model:
+        model_tag = model.replace("HuggingFace:", "")
+        translate_client = transformers.pipeline("translation", model=model_tag)
 
     df_tweets = df_tweets.dropna(subset=[text_column])
     df_texts = df_tweets.drop_duplicates(subset=[text_column])
 
     # translate to english
-    df_texts[text_column] = df_texts.progress_apply(lambda x: translate_string(x, translate_client, text_column), axis=1)
+    df_texts[text_column] = df_texts.progress_apply(lambda x:
+                                                    translate_string(x, translate_client, text_column, model),
+                                                    axis=1)
 
     for ix, row in df_tweets.iterrows():
         try:
@@ -295,30 +310,54 @@ def filter_by_keywords(df_tweets, text_columns, keywords):
     return df_tweets
 
 
-def detect_sentiment(row, nlp_client, text_column, TYPE_, ENCODING_):
+def detect_sentiment(row, nlp_client, text_column, model="HuggingFace"):
     text = row[text_column]
     if pd.isna(text):
         return np.nan, np.nan
     else:
-        document = {"content": text, "type_": TYPE_, "language": "en"}
-        response = nlp_client.analyze_sentiment(request={'document': document, 'encoding_type': ENCODING_})
-        return response.document_sentiment.score, response.document_sentiment.magnitude
+        if model == "Google":
+            TYPE_ = language_v1.Document.Type.PLAIN_TEXT
+            ENCODING_ = language_v1.EncodingType.UTF8
+            document = {"content": text, "type_": TYPE_, "language": "en"}
+            response = nlp_client.analyze_sentiment(request={'document': document, 'encoding_type': ENCODING_})
+            return response.document_sentiment.score, response.document_sentiment.magnitude
+        elif "HuggingFace" in model:
+            response = nlp_client(text, return_all_scores=True)[0]
+            weights = []
+            if len(response) == 2:
+                weights = [-1, 1]
+            elif len(response) == 3:
+                weights = [-1, 0, 1]
+            score, maxscore = 0, 0
+            for ix, label in enumerate(response):
+                score += label['score'] * weights[ix]
+                if label['score'] > maxscore:
+                    maxscore = label['score']
+            return score, maxscore
 
 
 def predict_sentiment(df_tweets, text_column, config):
-    # get Google API credentials
-    TYPE_ = language_v1.Document.Type.PLAIN_TEXT
-    ENCODING_ = language_v1.EncodingType.UTF8
-    service_account_info = get_secret_keyvault('google-secret', config)
-    credentials = service_account.Credentials.from_service_account_info(json.loads(service_account_info))
-    nlp_client = language_v1.LanguageServiceClient(credentials=credentials)
+
+    model = 'HuggingFace' # default model
+    if 'sentiment-model' in config.keys():
+        model = config['sentiment-model']
+
+    logging.info(f'predicting sentiment with {model}')
+
+    nlp_client = None
+    if model == 'Google':
+        service_account_info = get_secret_keyvault('google-secret', config)
+        credentials = service_account.Credentials.from_service_account_info(json.loads(service_account_info))
+        nlp_client = language_v1.LanguageServiceClient(credentials=credentials)
+    elif 'HuggingFace' in model:
+        model_tag = model.replace("HuggingFace:", "")
+        nlp_client = transformers.pipeline('sentiment-analysis', model=model_tag)
 
     df_texts = df_tweets.drop_duplicates(subset=[text_column])
 
     # detect sentiment
-    logging.info('predicting sentiment')
     df_texts['sentiment_score'], df_texts['sentiment_magnitude'] = \
-        zip(*df_texts.progress_apply(lambda x: detect_sentiment(x, nlp_client, text_column, TYPE_, ENCODING_), axis=1))
+        zip(*df_texts.progress_apply(lambda x: detect_sentiment(x, nlp_client, text_column, model), axis=1))
 
     for ix, row in df_tweets.iterrows():
         df_texts_ = df_texts[df_texts['id'] == row['id']]
