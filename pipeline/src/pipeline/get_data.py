@@ -1,4 +1,5 @@
 import tweepy
+import facebook
 import pandas as pd
 import requests
 import os
@@ -204,4 +205,63 @@ def get_kobo(config):
     df_form = pd.DataFrame(data)
 
     save_data("form_data", "kobo", df_form, "_id", config)
+
+
+def get_facebook(config):
+
+    # facebook_secrets
+    # {
+    #     "token": "EAAMR797ktqsBAB3OCimz8e1UMuTIZBoIv8taWxmInzOaznOIi3DiIJwWePajz9pmYTudY7dwl8uxK2JT6OItYrcpZAcU7bSWSvTJ5uWUE2ZAI6FwSAJ6mkcYzimv5bRFO1668dSuK1SzwZBHWFU79MYiz4UzHnffF5COHZCQTZAQzWdZBpXuWWMCWhs48bqt1ETciQY1MYmGAZDZD",
+    #     "page": "EthiopianRedCross"
+    # }
+
+    # get data from facebook
+    facebook_secrets = get_secret_keyvault('facebook-secret', config)
+    facebook_secrets = json.loads(facebook_secrets)
+    graph = facebook.GraphAPI(
+        access_token=facebook_secrets["token"],
+        version="3.1")
+
+    # get all comments to posts
+    df_posts = pd.DataFrame()
+    df_comments = pd.DataFrame()
+
+    page_posts = graph.get_object(id=facebook_secrets["page"], fields="feed")['feed']
+    while True:
+        for post in page_posts['data']:
+            stats = graph.get_object(id=post["id"], fields="message,shares,likes.summary(true)")
+            stats_to_save = {'id_post': stats['id']}
+            if 'message' in stats.keys():
+                stats_to_save['message'] = stats['message']
+            if 'shares' in stats.keys():
+                stats_to_save['shares'] = stats['shares']['count']
+            if 'likes' in stats.keys():
+                stats_to_save['like_count'] = stats['likes']['summary']['total_count']
+            # better, use reactions.type(TYPE).summary(total_count) for TYPE=LIKE, LOVE, WOW, HAHA, SORRY, ANGRY
+            # print(stats_to_save)
+            df_posts = df_posts.append(pd.Series(stats_to_save), ignore_index=True)
+
+            comments = {'data': []}
+            try:
+                comments = graph.get_object(id=post["id"], fields="comments")['comments']
+            except KeyError:
+                continue
+
+            while True:
+                for comment in comments['data']:
+                    stats = graph.get_object(id=comment["id"], fields="message,from,like_count")
+                    stats['id_comment'] = stats.pop('id')
+                    stats['id_post'] = post["id"]
+                    df_comments = df_comments.append(pd.Series(stats), ignore_index=True)
+                try:
+                    comments = requests.get(comments["paging"]["next"]).json()
+                except KeyError:
+                    break
+
+        try:
+            page_posts = requests.get(page_posts["paging"]["next"]).json()
+        except KeyError:
+            break
+
+    save_data("facebook_comments", "facebook", df_comments, "id_comment", config)
 
