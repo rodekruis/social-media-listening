@@ -16,7 +16,6 @@ RUN pip install --upgrade pip && \
 	pip install GDAL==$(gdal-config --version)
 
 ADD config /config
-ADD credentials /credentials
 
 WORKDIR /pipeline
 ADD pipeline .
