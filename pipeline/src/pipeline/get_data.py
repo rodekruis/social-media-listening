@@ -209,12 +209,6 @@ def get_kobo(config):
 
 def get_facebook(config):
 
-    # facebook_secrets
-    # {
-    #     "token": "EAAMR797ktqsBAB3OCimz8e1UMuTIZBoIv8taWxmInzOaznOIi3DiIJwWePajz9pmYTudY7dwl8uxK2JT6OItYrcpZAcU7bSWSvTJ5uWUE2ZAI6FwSAJ6mkcYzimv5bRFO1668dSuK1SzwZBHWFU79MYiz4UzHnffF5COHZCQTZAQzWdZBpXuWWMCWhs48bqt1ETciQY1MYmGAZDZD",
-    #     "page": "EthiopianRedCross"
-    # }
-
     # get data from facebook
     facebook_secrets = get_secret_keyvault('facebook-secret', config)
     facebook_secrets = json.loads(facebook_secrets)
