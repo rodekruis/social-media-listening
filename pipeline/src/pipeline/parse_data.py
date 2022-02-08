@@ -5,6 +5,8 @@ import numpy as np
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, filter_by_keywords, \
     get_blob_service_client, html_decode, predict_topic, predict_sentiment, save_data
 import logging
+from datetime import datetime
+import random
 
 
 def get_retweet(row_):
@@ -26,6 +28,97 @@ def get_url_from_entities(entities):
 
 def get_url_from_tweet(row):
     return f"https://twitter.com/{row['screen_name']}/status/{row['id']}"
+
+
+def parse_azure_table(df, config):
+
+    next_text_value = config["text-field-azure-table"]
+
+    if type(next_text_value) != str and len(next_text_value) > 0:
+        col0 = next_text_value[0]
+        df[col0] = df[col0].replace(r'^\s*$', np.nan, regex=True)
+        if col0 not in df.columns:
+            raise ValueError(f"text-field-azure-table {col0} not in data, check config")
+        for col in next_text_value[1:]:
+            if col not in df.columns:
+                raise ValueError(f"text-field-azure-table {col} not in data, check config")
+            df[col0] = df[col0].fillna(df[col])
+        next_text_value = col0
+
+    # translate tweets
+    if config["translate"]:
+        df = translate_dataframe(df, next_text_value, 'full_text_en', config)
+        next_text_value = 'full_text_en'
+
+    # filter by keywords
+    if config["filter-by-keywords"]:
+        df_keywords = pd.read_csv('../config/keywords.csv')
+        keywords = df_keywords.dropna()['keyword'].tolist()
+        df = filter_by_keywords(df, [next_text_value], keywords)
+
+    # geolocate
+    if config["geolocate"]:
+        df = geolocate_dataframe(df,
+                                config['geodata-locations'],
+                                config['geodata-country-boundaries'],
+                                config['location-input'],
+                                config['location-output'],
+                                [next_text_value],
+                                config)
+
+    # sentiment analysis
+    if config["analyse-sentiment"]:
+        df = predict_sentiment(df, next_text_value, config)
+
+    # topic analysis
+    if config["analyse-topic"]:
+        df = predict_topic(df, next_text_value, config)
+
+    return df
+
+
+def parse_facebook(config):
+
+    # load and parse facebook comments
+    data_dir = "./facebook"
+    data_path = data_dir + "/facebook_comments_latest.csv"
+    df_fb = pd.read_csv(data_path)
+    next_text_value = "message"
+    if next_text_value not in df_fb.columns:
+        raise ValueError(f"{next_text_value} field not in facebook data")
+
+    # translate tweets
+    if config["translate"]:
+        df_fb = translate_dataframe(df_fb, next_text_value, 'full_text_en', config)
+        next_text_value = 'full_text_en'
+
+    # filter by keywords
+    if config["filter-by-keywords"]:
+        df_keywords = pd.read_csv('../config/keywords.csv')
+        keywords = df_keywords.dropna()['keyword'].tolist()
+        df_fb = filter_by_keywords(df_fb, [next_text_value], keywords)
+
+    # geolocate
+    if config["geolocate"]:
+        df_fb = geolocate_dataframe(df_fb,
+                                  config['geodata-locations'],
+                                  config['geodata-country-boundaries'],
+                                  config['location-input'],
+                                  config['location-output'],
+                                  [next_text_value],
+                                  config,
+                                  'place')
+
+    # sentiment analysis
+    if config["analyse-sentiment"]:
+        df_fb = predict_sentiment(df_fb, next_text_value, config)
+
+    # topic analysis
+    if config["analyse-topic"]:
+        df_fb = predict_topic(df_fb, next_text_value, config)
+
+    save_data("facebook_comments_processed", "facebook", df_fb, "id_comment", config)
+    return "./facebook/facebook_comments_processed_all.csv"
 
 
 def parse_kobo(config):

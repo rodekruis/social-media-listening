@@ -37,6 +37,7 @@ STOPWORDS.append('get')
 from pipeline.GSDMM import MovieGroupProcess
 import ast
 from azure.storage.blob import BlobServiceClient
+from azure.data.tables import TableServiceClient
 from tqdm import tqdm
 tqdm.pandas()
 tp.set_options(tp.OPT.URL, tp.OPT.EMOJI, tp.OPT.MENTION)
@@ -85,6 +86,12 @@ def get_blob_service_client(blob_path, config):
     blob_service_client = BlobServiceClient.from_connection_string(blobstorage_secrets['connection_string'])
     container = blobstorage_secrets['container']
     return blob_service_client.get_blob_client(container=container, blob=blob_path)
+
+
+def get_table_service_client(table, config):
+    table_secret = get_secret_keyvault('table-secret', config)
+    table_service_client = TableServiceClient.from_connection_string(table_secret)
+    return table_service_client.get_table_client(table_name=table)
 
 
 def match_location(x, gdf, target_column, loc_column, locations):
@@ -393,6 +400,9 @@ def predict_topic(df_tweets, text_column, config):
     models_path = "./models"
     os.makedirs(models_path, exist_ok=True)
     model_filepath = os.path.join(models_path, model_filename)
+    models_blob_path = "models"
+    if "model-directory" in config.keys():
+        models_blob_path = config["model-directory"]
 
     text = df_tweets[text_column]
     text = text[text != 'None'].astype(str)
@@ -408,7 +418,7 @@ def predict_topic(df_tweets, text_column, config):
     # initialize and fit GSDMM model
     if not refit:
         # download topic model
-        blob_client = get_blob_service_client('models/' + model_filename, config)
+        blob_client = get_blob_service_client(os.path.join(models_blob_path, model_filename), config)
         if os.path.exists(model_filepath):
             os.remove(model_filepath)
         with open(model_filepath, "wb") as download_file:
@@ -425,7 +435,7 @@ def predict_topic(df_tweets, text_column, config):
         y = model.fit(processed_docs, len(processed_docs))
         pickle.dump(model, open(model_filepath, "wb"))
         # upload topic model for later use
-        blob_client = get_blob_service_client('models/' + model_filename, config)
+        blob_client = get_blob_service_client(os.path.join(models_blob_path, model_filename), config)
         with open(model_filepath, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
@@ -472,7 +482,7 @@ def predict_topic(df_tweets, text_column, config):
 
     if not refit:
         # add topic descriptions and save topics locally
-        blob_client = get_blob_service_client('models/' + keys_to_topic_filename, config)
+        blob_client = get_blob_service_client(os.path.join(models_blob_path, keys_to_topic_filename), config)
         topics_file_path = os.path.join(models_path, keys_to_topic_filename)
         if os.path.exists(topics_file_path):
             os.remove(topics_file_path)
@@ -485,11 +495,12 @@ def predict_topic(df_tweets, text_column, config):
     os.makedirs(topic_dir, exist_ok=True)
     df.to_csv(os.path.join(topic_dir, 'topics_latest_select.csv'))
 
-    # assign topic to tweets
-    logging.info('assign topic to tweets')
-    for ix, row in text.iterrows():
-        topic = df[df['topic number']==row['topic_num']]["topic"].values[0]
-        df_tweets.at[df_tweets[text_column]==row["text"], 'topic'] = topic
+    if not refit:
+        # assign topic to tweets
+        logging.info('assign topic to tweets')
+        for ix, row in text.iterrows():
+            topic = df[df['topic number']==row['topic_num']]["topic"].values[0]
+            df_tweets.at[df_tweets[text_column]==row["text"], 'topic'] = topic
 
     return df_tweets
 
