@@ -23,8 +23,9 @@ with a meaningful, human-readable description.
 Data sources supported by the rumor-tracker:
 1. Twitter
 2. YouTube
-3. Kobo [TBI]
-4. Facebook [TBI]
+3. KoBo
+4. Facebook
+5. Azure Table Storage
 
 ## Setup
 Generic requirements:
