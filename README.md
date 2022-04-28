@@ -15,7 +15,7 @@ This repo contains the code to:
 4. Divide it into topics
 5. Assign a topic and a representative example to each group
 
-Topic modelling is built on top of [GSDMM: short text clustering](https://github.com/rwalk/gsdmm), while sentiment and translation use [Google Cloud Natural Language](https://cloud.google.com/natural-language).
+Topic modelling is built on top of [GSDMM: short text clustering](https://github.com/rwalk/gsdmm), while sentiment and translation use [Hugging Face Models](https://huggingface.co/) and/or [Google Cloud Natural Language](https://cloud.google.com/natural-language).
 
 N.B. the creation of groups (a.k.a. clustering) is automated, but the topic description is not. You need a human to read some representative examples of each group and come up 
 with a meaningful, human-readable description.
