@@ -264,6 +264,44 @@ def parse_youtube(config):
     save_data("videos_processed", "youtube", df_videos, "id", config)
     return "./youtube/videos_processed_all.csv"
 
+def parse_telegram(config):
+
+    # load telegram data
+    telegram_data_path = "./telegram"
+    messages_path = telegram_data_path + "/telegram_messages_latest.csv"
+    df_messages = pd.read_csv(messages_path)
+    next_text_value = 'text'
+
+    # translate videos title
+    if config["translate"]:
+        df_messages = translate_dataframe(df_messages, next_text_value, 'full_text_en', config)
+        next_text_value = 'full_text_en'
+
+    # filter by keywords
+    if config["filter-by-keywords"]:
+        df_keywords = pd.read_csv('../config/keywords.csv')
+        keywords = df_keywords.dropna()['keyword'].tolist()
+        df_messages = filter_by_keywords(df_messages, [next_text_value], keywords)
+
+    # geolocate messages
+    if config["geolocate"]:
+        df_messages = geolocate_dataframe(df_messages,
+                                          config['geodata-locations'],
+                                          config['geodata-country-boundaries'],
+                                          config['location-input'],
+                                          config['location-output'],
+                                          [next_text_value],
+                                          config)
+    # sentiment analysis
+    if config["analyse-sentiment"]:
+        df_messages = predict_sentiment(df_messages, next_text_value, config)
+
+    # topic analysis
+    if config["analyse-topic"]:
+        df_messages = predict_topic(df_messages, next_text_value, config)
+
+    save_data("messages_processed", "telegram", df_messages, "id", config)
+    return "./telegram/messages_processed_all.csv"
 
 def merge_sources(data_to_merge, config):
 
