@@ -2,8 +2,8 @@ import datetime
 import os, traceback, sys
 import pandas as pd
 from pipeline.get_data import get_twitter, get_youtube, get_kobo, get_facebook, get_telegram
-from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, parse_facebook, parse_azure_table,\
-    merge_sources
+from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, parse_facebook, parse_azure_table, \
+    merge_sources, parse_telegram
 from pipeline.utils import get_table_service_client
 from azure.data.tables import UpdateMode
 from tqdm import tqdm
@@ -14,12 +14,16 @@ import yaml
 from dotenv import load_dotenv
 
 logging.root.handlers = []
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG, filename='ex.log')
+logging.basicConfig(
+    format="%(asctime)s : %(levelname)s : %(message)s",
+    level=logging.DEBUG,
+    filename="ex.log",
+)
 # set up logging to console
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 # set a format which is simpler for console use
-formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(message)s')
+formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(message)s")
 console.setFormatter(formatter)
 logging.getLogger("").addHandler(console)
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -29,22 +33,26 @@ logging.getLogger("requests_oauthlib").setLevel(logging.WARNING)
 
 
 @click.command()
-@click.option('--config', default="namibia.json", help='configuration file (json)')
-@click.option('--keep', default="", help='keep first N messages (all if empty)')
+@click.option("--config", default="namibia.json", help="configuration file (json)")
+@click.option("--keep", default="", help="keep first N messages (all if empty)")
 def main(config, keep):
 
-    utc_timestamp = datetime.datetime.utcnow().replace(
-        tzinfo=datetime.timezone.utc).isoformat()
+    utc_timestamp = (
+        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+    )
 
     # load configuration
     with open(f"../config/{config}") as file:
-        if config.endswith('json'):
+        if config.endswith("json"):
             config = json.load(file)
-        elif config.endswith('yaml'):
+        elif config.endswith("yaml"):
             config = yaml.load(file, Loader=yaml.FullLoader)
 
     # load credentials
-    if all(x in os.environ for x in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"]):
+    if all(
+        x in os.environ
+        for x in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"]
+    ):
         pass
     else:
         load_dotenv(f"../credentials/.env")
@@ -55,9 +63,13 @@ def main(config, keep):
     if config["track-azure-table"]:
         try:
             table_client = get_table_service_client(config["azure-table-name"], config)
-            df = pd.DataFrame(table_client.query_entities("Timestamp gt datetime'2000-01-01T00:00:00Z'"))
+            df = pd.DataFrame(
+                table_client.query_entities(
+                    "Timestamp gt datetime'2000-01-01T00:00:00Z'"
+                )
+            )
             if keep != "":
-                df = df[:int(keep)]
+                df = df[: int(keep)]
             df_start = df.copy()
         except Exception as e:
             logging.error(f"in getting azure table data: {e}")
@@ -71,12 +83,18 @@ def main(config, keep):
         try:
             logging.info("updating azure table")
             table_client = get_table_service_client(config["azure-table-name"], config)
-            df = df.dropna(subset=['topic'])  # drop nan on topic
+            df = df.dropna(subset=["topic"])  # drop nan on topic
 
             # drop what was classified already
             len_before = len(df)
-            df = df.drop(index=df_start[df_start['topic'].isin(df['topic'].unique().tolist())].index)
-            logging.info(f"updating entities with missing topic: {len(df)} (out of {len_before})")
+            df = df.drop(
+                index=df_start[
+                    df_start["topic"].isin(df["topic"].unique().tolist())
+                ].index
+            )
+            logging.info(
+                f"updating entities with missing topic: {len(df)} (out of {len_before})"
+            )
 
             # update entities in table
             df_test, cnt = pd.DataFrame(), 0
@@ -84,7 +102,9 @@ def main(config, keep):
                 if (cnt % 1000) == 0:
                     logging.info(f"{cnt}/{len(df)}")
                 cnt += 1
-                replaced = table_client.get_entity(partition_key=row["PartitionKey"], row_key=row["RowKey"])
+                replaced = table_client.get_entity(
+                    partition_key=row["PartitionKey"], row_key=row["RowKey"]
+                )
                 replaced["topic"] = row["topic"]
                 df_test = df_test.append(pd.Series(replaced), ignore_index=True)
                 table_client.update_entity(mode=UpdateMode.MERGE, entity=replaced)
@@ -150,13 +170,12 @@ def main(config, keep):
         except Exception as e:
             logging.error(f"in getting telegram data: {e}")
             traceback.print_exception(*sys.exc_info())
-        # try:
-        #     data_youtube = parse_youtube(config)
-        #     data_to_merge.append(data_youtube)
-        # except Exception as e:
-        #     logging.error(f"in parsing youtube data: {e}")
-        #     traceback.print_exception(*sys.exc_info())
-
+        try:
+            data_telegram = parse_telegram(config)
+            data_to_merge.append(data_telegram)
+        except Exception as e:
+            logging.error(f"in parsing telegram data: {e}")
+            traceback.print_exception(*sys.exc_info())
 
     if len(data_to_merge) > 0:
         try:
@@ -165,9 +184,9 @@ def main(config, keep):
             logging.error(f"in merging data: {e}")
             traceback.print_exception(*sys.exc_info())
     else:
-        logging.warning('No data to merge, skipping')
+        logging.warning("No data to merge, skipping")
 
-    logging.info('Python timer trigger function ran at %s', utc_timestamp)
+    logging.info("Python timer trigger function ran at %s", utc_timestamp)
 
 
 if __name__ == "__main__":
