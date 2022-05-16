@@ -3,7 +3,7 @@ import os, traceback, sys
 import pandas as pd
 from pipeline.get_data import get_twitter, get_youtube, get_kobo, get_facebook, get_telegram
 from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, parse_facebook, parse_azure_table,\
-    merge_sources
+    merge_sources, parse_telegram
 from pipeline.utils import get_table_service_client
 from azure.data.tables import UpdateMode
 from tqdm import tqdm
@@ -150,12 +150,12 @@ def main(config, keep):
         except Exception as e:
             logging.error(f"in getting telegram data: {e}")
             traceback.print_exception(*sys.exc_info())
-        # try:
-        #     data_youtube = parse_youtube(config)
-        #     data_to_merge.append(data_youtube)
-        # except Exception as e:
-        #     logging.error(f"in parsing youtube data: {e}")
-        #     traceback.print_exception(*sys.exc_info())
+        try:
+            data_telegram = parse_telegram(config)
+            data_to_merge.append(data_telegram)
+        except Exception as e:
+            logging.error(f"in parsing telegram data: {e}")
+            traceback.print_exception(*sys.exc_info())
 
 
     if len(data_to_merge) > 0:
