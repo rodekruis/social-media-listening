@@ -1,7 +1,7 @@
 import datetime
 import os, traceback, sys
 import pandas as pd
-from pipeline.get_data import get_twitter, get_youtube, get_kobo, get_facebook
+from pipeline.get_data import get_twitter, get_youtube, get_kobo, get_facebook, get_telegram
 from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, parse_facebook, parse_azure_table,\
     merge_sources
 from pipeline.utils import get_table_service_client
@@ -12,6 +12,10 @@ import click
 import json
 import yaml
 from dotenv import load_dotenv
+
+# load credentials
+load_dotenv(dotenv_path="../../../credentials/.env")
+
 logging.root.handlers = []
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG, filename='ex.log')
 # set up logging to console
@@ -142,6 +146,20 @@ def main(config, keep):
         except Exception as e:
             logging.error(f"in parsing youtube data: {e}")
             traceback.print_exception(*sys.exc_info())
+
+    if config["track-telegram-groups"]:
+        try:
+            get_telegram(config)
+        except Exception as e:
+            logging.error(f"in getting telegram data: {e}")
+            traceback.print_exception(*sys.exc_info())
+        # try:
+        #     data_youtube = parse_youtube(config)
+        #     data_to_merge.append(data_youtube)
+        # except Exception as e:
+        #     logging.error(f"in parsing youtube data: {e}")
+        #     traceback.print_exception(*sys.exc_info())
+
 
     if len(data_to_merge) > 0:
         try:
