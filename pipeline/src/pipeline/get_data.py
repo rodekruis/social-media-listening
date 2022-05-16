@@ -293,7 +293,7 @@ def get_telegram(config):
             df_messages.at[ix, "datetime"] = message.date
             count += 1
 
-            if count == 2:
+            if count == 5000:
                 break
     logging.info("Saving Telegram data")
     save_data("telegram_messages", "telegram", df_messages, "id", config)
