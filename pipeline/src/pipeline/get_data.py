@@ -5,6 +5,7 @@ import requests
 import os
 from google.oauth2 import service_account
 import googleapiclient.discovery
+from telethon import TelegramClient, events, sync
 from pipeline.utils import get_blob_service_client, get_secret_keyvault, save_data
 import logging
 
@@ -259,3 +260,40 @@ def get_facebook(config):
 
     save_data("facebook_comments", "facebook", df_comments, "id_comment", config)
 
+def get_telegram(config):
+
+    logging.info("Getting telegram data")
+
+    #get data from telegram
+    telegram_secrets = get_secret_keyvault("telegram-secret", config)
+    telegram_secrets = json.loads(telegram_secrets)
+    telegram_phone = config["telegram-phone"]
+
+    telegram_client = TelegramClient(
+        "session_name",
+        telegram_secrets["telegram-api-id"],
+        telegram_secrets["telegram-api-hash"]
+    )
+    telegram_client.start(phone=telegram_phone)
+    logging.info("Telegram client created")
+
+    telegram_channels = config["telegram-channels"]
+
+    df_messages = pd.DataFrame()
+    for channel in telegram_channels:
+        channel_entity = telegram_client.get_entity(channel)
+        count = 0
+
+        for message in telegram_client.iter_messages(channel_entity):
+
+            ix = len(df_messages)
+            df_messages.at[ix, "source"] = channel
+            df_messages.at[ix, "id"] = message.id
+            df_messages.at[ix, "text"] = message.text
+            df_messages.at[ix, "datetime"] = message.date
+            count += 1
+
+            if count == 2:
+                break
+    logging.info("Saving Telegram data")
+    save_data("telegram_messages", "telegram", df_messages, "id", config)
