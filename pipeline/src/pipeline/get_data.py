@@ -293,7 +293,7 @@ def get_telegram(config):
     logging.info("Getting telegram data")
 
     # get data from telegram
-    telegram_secrets = get_secret_keyvault("telegram-secrets", config)
+    telegram_secrets = get_secret_keyvault("telegram-secret", config)
     telegram_secrets = json.loads(telegram_secrets)
     telegram_phone = config["telegram-phone"]
 
