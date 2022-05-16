@@ -13,9 +13,6 @@ import json
 import yaml
 from dotenv import load_dotenv
 
-# load credentials
-load_dotenv(dotenv_path="../../../credentials/.env")
-
 logging.root.handlers = []
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG, filename='ex.log')
 # set up logging to console
