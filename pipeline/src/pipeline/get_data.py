@@ -8,6 +8,7 @@ import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
 from pipeline.utils import get_blob_service_client, get_secret_keyvault, save_data
 import logging
+import datetime
 
 # -*- coding: utf-8 -*-
 try:
@@ -267,14 +268,13 @@ def get_telegram(config):
     #get data from telegram
     telegram_secrets = get_secret_keyvault("telegram-secret", config)
     telegram_secrets = json.loads(telegram_secrets)
-    telegram_phone = config["telegram-phone"]
 
     telegram_client = TelegramClient(
-        "session_name",
+        "rou-smm",
         telegram_secrets["telegram-api-id"],
         telegram_secrets["telegram-api-hash"]
     )
-    telegram_client.start(phone=telegram_phone)
+    telegram_client.connect()
     logging.info("Telegram client created")
 
     telegram_channels = config["telegram-channels"]
@@ -282,18 +282,45 @@ def get_telegram(config):
     df_messages = pd.DataFrame()
     for channel in telegram_channels:
         channel_entity = telegram_client.get_entity(channel)
-        count = 0
 
-        for message in telegram_client.iter_messages(channel_entity):
+        for message in telegram_client.iter_messages(
+            channel_entity,
+            offset_date=datetime.datetime(2022, 5, 15),
+            reverse=True
+        ):
 
             ix = len(df_messages)
             df_messages.at[ix, "source"] = channel
             df_messages.at[ix, "id"] = message.id
             df_messages.at[ix, "text"] = message.text
             df_messages.at[ix, "datetime"] = message.date
-            count += 1
 
-            if count == 5000:
-                break
+    keywords_cash = [
+        "отримати",
+        "отримали",
+        "картка",
+        "гроші",
+        "банк",
+        "додаток",
+        "код",
+        "передача",
+        "платіж",
+        "платежі",
+        "лей",
+        "гривні",
+        "готівка",
+        "допомога"
+    ]
+
+    # df_messages['cash_assistance'] =\
+    #     df_messages['text'].apply(
+    #         lambda x: 1 if any(word.lower() in str(x).lower().split() for word in keywords_cash) else 0
+    #     )
+    #
+    # df_messages = df_messages[
+    #     df_messages['cash_assistance'] == 1
+    # ]
+
+
     logging.info("Saving Telegram data")
     save_data("telegram_messages", "telegram", df_messages, "id", config)
