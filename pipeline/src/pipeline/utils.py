@@ -316,6 +316,53 @@ def filter_by_keywords(df_tweets, text_columns, keywords):
     df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
     return df_tweets
 
+def get_word_frequency(df_tweets, text_column):
+
+    # Get messages
+    text = ''.join(df_tweets[text_column].to_string())
+
+    # Remove Punctuation
+    text = re.sub(r"[^\w\s]", "", text)
+    text = text.replace(",", "")
+
+    # Declare a dictionary
+    dict_word_freq = {}
+
+    # split all the word of the string.
+    text_list = text.split()
+
+    # take each word from text_list and count occurence
+    for element in text_list:
+        # check if each word has '.' at its last. If so then ignore '.'
+        if element[-1] == '.':
+            element = element[0:len(element) - 1]
+
+        # if there exists a key as "elements" then simply
+        # increase its value.
+        if element in dict_word_freq:
+            dict_word_freq[element] += 1
+        else:
+            dict_word_freq.update({element: 1})
+
+    # sort dict
+    dict_word_freq = {
+        key: value for key, value in sorted(
+            dict_word_freq.items(),
+            key=lambda item: item[1],
+            reverse=True
+        )
+    }
+
+    df_word_freq = pd.DataFrame.from_dict(dict_word_freq, orient='index')
+
+    word_freq_dir = './word_frequencies'
+    os.makedirs(word_freq_dir, exist_ok=True)
+
+    logging.info(f'Storing word frequencies at {word_freq_dir}/telegram_word_frequencies.csv')
+    df_word_freq.to_csv(os.path.join(topic_dir, 'telegram_word_frequencies.csv'))
+
+    return
+
 
 def detect_sentiment(row, nlp_client, text_column, model="HuggingFace"):
     text = row[text_column]

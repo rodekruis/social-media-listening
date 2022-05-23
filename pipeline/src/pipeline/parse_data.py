@@ -3,7 +3,7 @@ import ast
 import pandas as pd
 import numpy as np
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, filter_by_keywords, \
-    get_blob_service_client, html_decode, predict_topic, predict_sentiment, save_data
+    get_blob_service_client, html_decode, predict_topic, predict_sentiment, save_data, get_word_frequency
 import logging
 from datetime import datetime
 import random
@@ -271,6 +271,10 @@ def parse_telegram(config):
     messages_path = telegram_data_path + "/telegram_messages_latest.csv"
     df_messages = pd.read_csv(messages_path)
     next_text_value = 'text'
+
+    # get distribution of words
+    if config["get-word-freq"]:
+        get_word_frequency(df_messages, next_text_value)
 
     # translate videos title
     if config["translate"]:
