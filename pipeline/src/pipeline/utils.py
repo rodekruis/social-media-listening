@@ -312,7 +312,11 @@ def filter_by_keywords(df_tweets, text_columns, keywords):
     df_tweets['is_conflict'] = False
     for text_column in text_columns:
         df_tweets[text_column] = df_tweets[text_column].fillna("")
-        df_tweets.at[df_tweets[text_column].str.contains('|'.join(keywords)), 'is_conflict'] = True
+
+        df_tweets['is_conflict'] = df_tweets[text_column].apply(
+            lambda x: True if any(word.lower() in str(x).lower() for word in keywords) else False
+        )
+
     df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
     return df_tweets
 
