@@ -265,29 +265,55 @@ def parse_youtube(config):
     return "./youtube/videos_processed_all.csv"
 
 def parse_telegram(config):
+    '''
+       1: Load scraped messages
+       2: Filter messages with RED CROSS key words in UK or RU, column: 'is_ru_uk' True/False
+       3: Translate all messages to EN
+       4: Run sentiment analysis in all EN messages
+       5: Filter messages in 2-True with CVA keywords, column: 'is_cva' True/False
+       6: Filter messages in 2-False with PGI keywords, column: 'is_pgi' True/False
+       TODO: Run topic model each group in 5 and 6
+       8: Merge messages of each group
+       9: Save to AZ
+
+       '''
 
     # load telegram data
     telegram_data_path = "./telegram"
-    messages_path = telegram_data_path + "/telegram_messages_latest.csv"
+    messages_path = telegram_data_path + "/messages_processed_latest.csv"
     df_messages = pd.read_csv(messages_path)
-    next_text_value = 'text'
+    df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
+    next_text_value = 'full_text_en'
+    topic_1 = 'ru_uk'
+    topic_2 = 'cva'
+    topic_3 = 'pgi'
 
-    # get distribution of words
-    if config["get-word-freq"]:
-        get_word_frequency(df_messages, next_text_value)
-
-    # translate videos title
-    if config["translate"]:
-        df_messages = translate_dataframe(df_messages, next_text_value, 'full_text_en', config)
-        next_text_value = 'full_text_en'
-
-    # filter by keywords
     if config["filter-by-keywords"]:
-        df_keywords = pd.read_csv('../config/keywords.csv')
-        keywords = df_keywords.dropna()['keyword'].tolist()
-        df_messages = filter_by_keywords(df_messages, [next_text_value], keywords)
+        # filter 1: by keywords RED CROSS in UK and RU
+        df_keywords_1 = pd.read_csv(f'../config/{config["keywords-1-filename"]}')
+        keywords_1 = df_keywords_1.dropna()['keyword'].tolist()
+        df_messages = filter_by_keywords(df_messages, [next_text_value], keywords_1, topic_1)
+        # filter 2: by keywords CVA in UK and RU
+        df_keywords_2 = pd.read_csv(f'../config/{config["keywords-2-filename"]}')
+        keywords_2 = df_keywords_2.dropna()['keyword'].tolist()
+        df_messages = filter_by_keywords(df_messages, [next_text_value], keywords_2, topic_2)
+        # filter 3: by keywords PGI in UK and RU
+        df_keywords_3 = pd.read_csv(f'../config/{config["keywords-3-filename"]}')
+        keywords_3 = df_keywords_3.dropna()['keyword'].tolist()
+        df_messages = filter_by_keywords(df_messages, [next_text_value], keywords_3, topic_3)
 
-    # geolocate messages
+    # translate telegram messages
+    if config["translate"]:
+        df_to_translate = df_messages[(df_messages[topic_1]) | (df_messages[topic_3])]
+        df_messages = translate_dataframe(df_to_translate, next_text_value, 'full_text_en', config)
+        next_text_value = 'full_text_en'
+    # save_data("messages_translated", "telegram", df_messages, "id", config)
+
+    # sentiment analysis
+    if config["analyse-sentiment"]:
+        df_messages = predict_sentiment(df_messages, next_text_value, config)
+
+        # geolocate messages
     if config["geolocate"]:
         df_messages = geolocate_dataframe(df_messages,
                                           config['geodata-locations'],
@@ -296,13 +322,25 @@ def parse_telegram(config):
                                           config['location-output'],
                                           [next_text_value],
                                           config)
-    # sentiment analysis
-    if config["analyse-sentiment"]:
-        df_messages = predict_sentiment(df_messages, next_text_value, config)
 
     # topic analysis
     if config["analyse-topic"]:
-        df_messages = predict_topic(df_messages, next_text_value, config)
+        # analyse topic RED CROSS and CVA
+        df_messages_1 = df_messages[
+            (df_messages[topic_1]) & \
+            (df_messages[topic_2]) & \
+            (df_messages['date'] >= '2022-04-28')
+            ]
+        df_messages_1 = predict_topic(df_messages_1, next_text_value, config, topic_1)
+        # analyse topic RED CROSS and not CVA
+        df_messages_2 = df_messages[df_messages[topic_1] & ~df_messages[topic_2]]
+        df_messages_2 = predict_topic(df_messages_2, next_text_value, config, topic_2)
+        # analyse topic PGI
+        df_messages_3 = df_messages[df_messages[topic_3]]
+        df_messages_3 = predict_topic(df_messages_3, next_text_value, config, topic_3)
+        # merge all into one single df
+        df_messages = df_messages_1.append(df_messages_2, ignore_index=True)
+        df_messages = df_messages.append(df_messages_3, ignore_index=True)
 
     save_data("messages_processed", "telegram", df_messages, "id", config)
     return "./telegram/messages_processed_all.csv"

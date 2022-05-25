@@ -24,16 +24,16 @@ stemmer = PorterStemmer()
 from spellchecker import SpellChecker
 spell = SpellChecker()
 from gensim.parsing.preprocessing import STOPWORDS
-STOPWORDS = list(STOPWORDS) # TBI move to config
-STOPWORDS.append('covid')
-STOPWORDS.append('vaccine')
-STOPWORDS.append('vaccines')
-STOPWORDS.append('vaccinated')
-STOPWORDS.append('namibia')
-STOPWORDS.append('says')
-STOPWORDS.append('because')
-STOPWORDS.append('like')
-STOPWORDS.append('get')
+# STOPWORDS = list(STOPWORDS) # TBI move to config
+# STOPWORDS.append('covid')
+# STOPWORDS.append('vaccine')
+# STOPWORDS.append('vaccines')
+# STOPWORDS.append('vaccinated')
+# STOPWORDS.append('namibia')
+# STOPWORDS.append('says')
+# STOPWORDS.append('because')
+# STOPWORDS.append('like')
+# STOPWORDS.append('get')
 from pipeline.GSDMM import MovieGroupProcess
 import ast
 from azure.storage.blob import BlobServiceClient
@@ -308,16 +308,16 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config):
     return df_tweets
 
 
-def filter_by_keywords(df_tweets, text_columns, keywords):
-    df_tweets['is_conflict'] = False
+def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_conflict'):
+    df_tweets[filter_name] = False
     for text_column in text_columns:
         df_tweets[text_column] = df_tweets[text_column].fillna("")
 
-        df_tweets['is_conflict'] = df_tweets[text_column].apply(
+        df_tweets[filter_name] = df_tweets[text_column].apply(
             lambda x: True if any(word.lower() in str(x).lower() for word in keywords) else False
         )
 
-    df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
+    # df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
     return df_tweets
 
 def get_word_frequency(df_tweets, text_column):
@@ -442,12 +442,15 @@ def keywords_to_topic(df, df_topics):
     return df
 
 
-def predict_topic(df_tweets, text_column, config):
-
+def predict_topic(df_tweets, text_column, config, filter_name='all'):
     logging.info('predicting topic')
-    model_filename = config["model-filename"]
-    keys_to_topic_filename = config["keys-to-topics-filename"]
-    refit = False # True/ False
+    model_filename = f'{config["model-filename"].split(".")[0]}_\
+            {filter_name}_\
+            {config["model-filename"].split(".")[-1]}'
+    keys_to_topic_filename = f'{config["keys-to-topics-filename"].split(".")[0]}_\
+            {filter_name}_\
+            {config["keys-to-topics-filename"].split(".")[-1]}'
+    refit = True  # True/ False
     models_path = "./models"
     os.makedirs(models_path, exist_ok=True)
     model_filepath = os.path.join(models_path, model_filename)
@@ -544,7 +547,7 @@ def predict_topic(df_tweets, text_column, config):
 
     topic_dir = './topics'
     os.makedirs(topic_dir, exist_ok=True)
-    df.to_csv(os.path.join(topic_dir, 'topics_latest_select.csv'))
+    df.to_csv(os.path.join(topic_dir, f'topics_latest_select_{filter_name}.csv'))
 
     if not refit:
         # assign topic to tweets

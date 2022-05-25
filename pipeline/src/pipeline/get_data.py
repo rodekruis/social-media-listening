@@ -295,32 +295,5 @@ def get_telegram(config):
             df_messages.at[ix, "text"] = message.text
             df_messages.at[ix, "datetime"] = message.date
 
-    keywords_cash = [
-        "отримати",
-        "отримали",
-        "картка",
-        "гроші",
-        "банк",
-        "додаток",
-        "код",
-        "передача",
-        "платіж",
-        "платежі",
-        "лей",
-        "гривні",
-        "готівка",
-        "допомога"
-    ]
-
-    # df_messages['cash_assistance'] =\
-    #     df_messages['text'].apply(
-    #         lambda x: 1 if any(word.lower() in str(x).lower().split() for word in keywords_cash) else 0
-    #     )
-    #
-    # df_messages = df_messages[
-    #     df_messages['cash_assistance'] == 1
-    # ]
-
-
     logging.info("Saving Telegram data")
     save_data("telegram_messages", "telegram", df_messages, "id", config)

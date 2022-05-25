@@ -3,7 +3,7 @@ import os, traceback, sys
 import pandas as pd
 from pipeline.get_data import get_twitter, get_youtube, get_kobo, get_facebook, get_telegram
 from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, parse_facebook, parse_azure_table, \
-    merge_sources, parse_telegram
+    merge_sources, parse_telegram, prepare_final_dataset
 from pipeline.utils import get_table_service_client
 from azure.data.tables import UpdateMode
 from tqdm import tqdm
@@ -33,7 +33,7 @@ logging.getLogger("requests_oauthlib").setLevel(logging.WARNING)
 
 
 @click.command()
-@click.option("--config", default="namibia.json", help="configuration file (json)")
+@click.option("--config", default="romania.yaml", help="configuration file (json)")
 @click.option("--keep", default="", help="keep first N messages (all if empty)")
 def main(config, keep):
 
@@ -165,11 +165,11 @@ def main(config, keep):
             traceback.print_exception(*sys.exc_info())
 
     if config["track-telegram-groups"]:
-        try:
-            get_telegram(config)
-        except Exception as e:
-            logging.error(f"in getting telegram data: {e}")
-            traceback.print_exception(*sys.exc_info())
+        # try:
+        #     get_telegram(config)
+        # except Exception as e:
+        #     logging.error(f"in getting telegram data: {e}")
+        #     traceback.print_exception(*sys.exc_info())
         try:
             data_telegram = parse_telegram(config)
             data_to_merge.append(data_telegram)
