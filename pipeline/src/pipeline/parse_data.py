@@ -288,6 +288,10 @@ def parse_telegram(config):
     topic_2 = 'cva'
     topic_3 = 'pgi'
 
+    # get distribution of words
+    if config["get-word-freq"]:
+        get_word_frequency(df_messages, next_text_value)
+
     if config["filter-by-keywords"]:
         # filter 1: by keywords RED CROSS in UK and RU
         df_keywords_1 = pd.read_csv(f'../config/{config["keywords-1-filename"]}')
