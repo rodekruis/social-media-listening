@@ -5,7 +5,7 @@ Featuring: geolocation, translation to English, [sentiment analysis](https://en.
 
 Built to support Philippine, Namibia and Ethiopian Red Cross Society.
 
-Credits: [Phuoc Phung](https://github.com/p-phung), [Jacopo Margutti](https://github.com/jmargutt)
+Credits: [Wessel de Jong](https://github.com/Wessel93), [Phuoc Phung](https://github.com/p-phung), [Jacopo Margutti](https://github.com/jmargutt)
 
 ## Introduction
 This repo contains the code to:
@@ -25,7 +25,8 @@ Data sources supported by the rumor-tracker:
 2. YouTube
 3. KoBo
 4. Facebook
-5. Azure Table Storage
+5. Telegram
+6. Azure Table Storage
 
 ## Setup
 Generic requirements:
@@ -34,12 +35,13 @@ Generic requirements:
 -   OPTIONAL (Twitter): [Twitter developer account](https://developer.twitter.com/en/apply-for-access)
 -   OPTIONAL (geolocate): vector files of locations and country boundaries
 -   OPTIONAL (YouTube, translate): [Google Cloud account](https://cloud.google.com/)
+-   OPTIONAL (Telegram): [Telegram API Development](https://my.telegram.org)
 
 More in detail:
 - Follow [these instructions](https://docs.google.com/document/d/1q6h5zYDFLMaWDGBfSEe0EGl8Ymi09WhuqpHPxnQy6DU/edit?usp=sharing) to store credentials in Azure Key Vault and use them with the rumor-tracker. Secrets need to be in json format and contain all necessary fields, templates TBI
 - For 510: Google cloud service account credentials are accessible [here](https://console.cloud.google.com/apis/credentials?project=eth-conflict-tracker&folder=&organizationId=&supportedpurview=project), but create a new project if needed!. Login credentials in Bitwarden.
 
-The rumor-tracker can be confgured via one configuration file (json), see country-specific examples under [config](https://github.com/rodekruis/rumor-tracker/tree/master/config)
+The rumor-tracker can be confgured via one configuration file (yaml), see country-specific examples under [config](https://github.com/rodekruis/rumor-tracker/tree/master/config)
 
 ### with Docker
 1. Install [Docker](https://www.docker.com/get-started)
