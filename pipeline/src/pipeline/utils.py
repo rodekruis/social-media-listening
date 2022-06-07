@@ -309,6 +309,7 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config):
 
 
 def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_conflict'):
+    logging.info("Filtering by keywords")
     df_tweets[filter_name] = False
     for text_column in text_columns:
         df_tweets[text_column] = df_tweets[text_column].fillna("")
@@ -318,9 +319,11 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
         )
 
     # df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
+    logging.info("Done with filtering")
     return df_tweets
 
 def get_word_frequency(df_tweets, text_column):
+    logging.info('Calculating word frequencies')
 
     # Get messages
     text = ''.join(df_tweets[text_column].to_string())
@@ -363,7 +366,7 @@ def get_word_frequency(df_tweets, text_column):
     os.makedirs(word_freq_dir, exist_ok=True)
 
     logging.info(f'Storing word frequencies at {word_freq_dir}/telegram_word_frequencies.csv')
-    df_word_freq.to_csv(os.path.join(topic_dir, 'telegram_word_frequencies.csv'))
+    df_word_freq.to_csv(os.path.join(word_freq_dir, 'telegram_word_frequencies.csv'))
 
     return
 
