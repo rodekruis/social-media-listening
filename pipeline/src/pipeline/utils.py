@@ -9,6 +9,7 @@ from google.cloud import translate_v2 as translate
 from google.oauth2 import service_account
 from time import sleep
 from requests.exceptions import ReadTimeout, ConnectionError
+import requests, uuid, json
 from shapely.geometry import Polygon, Point
 import geopandas as gpd
 import json
@@ -263,6 +264,16 @@ def translate_string(row_, translate_client, text_field, model):
         elif "HuggingFace" in model:
             response = translate_client(text)[0]
             trans = response["translation_text"]
+        elif model == "Microsoft":
+            constructed_url = translate_client[0]
+            params = translate_client[1]
+            headers = translate_client[2]
+            body = body = [{
+               'text': text
+                }]
+            request = requests.post(constructed_url, params=params, headers=headers, json=body)
+            response = request.json()
+            trans = response[0]['translations'][0]['text']
 
         if pd.isna(trans):
             return text
@@ -288,6 +299,21 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config):
     elif 'HuggingFace' in model:
         model_tag = model.replace("HuggingFace:", "")
         translate_client = transformers.pipeline("translation", model=model_tag)
+    elif model == 'Microsoft':
+        subcription_info = get_secret_keyvault('mscognitive-secret', config)
+        subcription_info = json.loads(subcription_info)
+        constructed_url = config['mscognitive-url']
+        params = {
+            'api-version': '3.0',
+            'to': ['en']
+            }
+        headers = {
+            'Ocp-Apim-Subscription-Key': subcription_info["subscription_key"],
+            'Ocp-Apim-Subscription-Region': subcription_info["location"],
+            'Content-type': 'application/json',
+            'X-ClientTraceId': str(uuid.uuid4())
+            }
+        translate_client = [constructed_url, params, headers]
 
     df_tweets = df_tweets.dropna(subset=[text_column])
     df_texts = df_tweets.drop_duplicates(subset=[text_column])
