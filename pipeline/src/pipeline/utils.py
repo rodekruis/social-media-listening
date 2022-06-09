@@ -3,12 +3,14 @@ import pandas as pd
 import numpy as np
 import os
 import operator
+import re
 import gensim
 from google.cloud import language_v1
 from google.cloud import translate_v2 as translate
 from google.oauth2 import service_account
 from time import sleep
 from requests.exceptions import ReadTimeout, ConnectionError
+import requests, uuid, json
 from shapely.geometry import Polygon, Point
 import geopandas as gpd
 import json
@@ -263,6 +265,16 @@ def translate_string(row_, translate_client, text_field, model):
         elif "HuggingFace" in model:
             response = translate_client(text)[0]
             trans = response["translation_text"]
+        elif model == "Microsoft":
+            constructed_url = translate_client[0]
+            params = translate_client[1]
+            headers = translate_client[2]
+            body = body = [{
+                'text': text
+            }]
+            request = requests.post(constructed_url, params=params, headers=headers, json=body)
+            response = request.json()
+            trans = response[0]['translations'][0]['text']
 
         if pd.isna(trans):
             return text
@@ -288,6 +300,21 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config):
     elif 'HuggingFace' in model:
         model_tag = model.replace("HuggingFace:", "")
         translate_client = transformers.pipeline("translation", model=model_tag)
+    elif model == 'Microsoft':
+        subcription_info = get_secret_keyvault('mscognitive-secret', config)
+        subcription_info = json.loads(subcription_info)
+        constructed_url = config['mscognitive-url']
+        params = {
+            'api-version': '3.0',
+            'to': ['en']
+        }
+        headers = {
+            'Ocp-Apim-Subscription-Key': subcription_info["subscription_key"],
+            'Ocp-Apim-Subscription-Region': subcription_info["location"],
+            'Content-type': 'application/json',
+            'X-ClientTraceId': str(uuid.uuid4())
+        }
+        translate_client = [constructed_url, params, headers]
 
     df_tweets = df_tweets.dropna(subset=[text_column])
     df_texts = df_tweets.drop_duplicates(subset=[text_column])
@@ -311,16 +338,27 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config):
 def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_conflict'):
     logging.info("Filtering by keywords")
     df_tweets[filter_name] = False
+
     for text_column in text_columns:
         df_tweets[text_column] = df_tweets[text_column].fillna("")
 
         df_tweets[filter_name] = df_tweets[text_column].apply(
-            lambda x: True if any(word.lower() in str(x).lower() for word in keywords) else False
+            lambda x:
+            True if any(word == "КК" and
+                        re.search(r"\b" + re.escape(word.lower()) + r"\b", x.lower())
+                        for word in keywords)
+                else(
+                    True if any(word != "КК" and
+                                word.lower() in x.lower()
+                                for word in keywords)
+                    else False
+                )
         )
 
     # df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
     logging.info("Done with filtering")
     return df_tweets
+
 
 def get_word_frequency(df_tweets, text_column):
     logging.info('Calculating word frequencies')
@@ -447,12 +485,8 @@ def keywords_to_topic(df, df_topics):
 
 def predict_topic(df_tweets, text_column, config, filter_name='all'):
     logging.info('predicting topic')
-    model_filename = f'{config["model-filename"].split(".")[0]}_\
-            {filter_name}_\
-            {config["model-filename"].split(".")[-1]}'
-    keys_to_topic_filename = f'{config["keys-to-topics-filename"].split(".")[0]}_\
-            {filter_name}_\
-            {config["keys-to-topics-filename"].split(".")[-1]}'
+    model_filename = f'{config["model-filename"].split(".")[0]}_{filter_name}.{config["model-filename"].split(".")[-1]}'
+    keys_to_topic_filename = f'{config["keys-to-topics-filename"].split(".")[0]}_{filter_name}.{config["keys-to-topics-filename"].split(".")[-1]}'
     refit = True  # True/ False
     models_path = "./models"
     os.makedirs(models_path, exist_ok=True)

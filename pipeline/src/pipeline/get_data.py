@@ -6,6 +6,7 @@ import os
 from google.oauth2 import service_account
 import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
+from telethon.sessions import StringSession
 from pipeline.utils import get_blob_service_client, get_secret_keyvault, save_data
 import logging
 import datetime
@@ -270,14 +271,16 @@ def get_telegram(config):
     telegram_secrets = json.loads(telegram_secrets)
 
     telegram_client = TelegramClient(
-        "rou-smm",
-        telegram_secrets["telegram-api-id"],
-        telegram_secrets["telegram-api-hash"]
+        StringSession(telegram_secrets["session-string"]),#"rou-smm-bot",
+        telegram_secrets["api-id"],
+        telegram_secrets["api-hash"]
     )
-    telegram_client.connect()
-    logging.info("Telegram client created")
+    telegram_client.connect()  # start(bot_token=telegram_secrets["bot-token"])
+    logging.info("Telegram client connected")
 
     telegram_channels = config["telegram-channels"]
+    today = datetime.datetime.today().date()
+    start_date = today - pd.Timedelta(days=14)
 
     df_messages = pd.DataFrame()
     for channel in telegram_channels:
@@ -285,15 +288,21 @@ def get_telegram(config):
 
         for message in telegram_client.iter_messages(
             channel_entity,
-            offset_date=datetime.datetime(2022, 5, 15),
+            offset_date=start_date,
             reverse=True
         ):
 
             ix = len(df_messages)
             df_messages.at[ix, "source"] = channel
-            df_messages.at[ix, "id"] = message.id
             df_messages.at[ix, "text"] = message.text
             df_messages.at[ix, "datetime"] = message.date
+
+    telegram_client.disconnect()
+    logging.info("Telegram client disconnected")
+
+    # Add index column
+    df_messages.reset_index(inplace=True)
+    df_messages['id'] = df_messages.index
 
     logging.info("Saving Telegram data")
     save_data("telegram_messages", "telegram", df_messages, "id", config)
