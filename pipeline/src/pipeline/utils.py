@@ -269,7 +269,7 @@ def translate_string(row_, translate_client, text_field, model):
             constructed_url = translate_client[0]
             params = translate_client[1]
             headers = translate_client[2]
-            body = body = [{
+            body = [{
                 'text': text
             }]
             request = requests.post(constructed_url, params=params, headers=headers, json=body)
@@ -308,12 +308,14 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config):
             'api-version': '3.0',
             'to': ['en']
         }
+
         headers = {
             'Ocp-Apim-Subscription-Key': subcription_info["subscription_key"],
             'Ocp-Apim-Subscription-Region': subcription_info["location"],
             'Content-type': 'application/json',
             'X-ClientTraceId': str(uuid.uuid4())
         }
+
         translate_client = [constructed_url, params, headers]
 
     df_tweets = df_tweets.dropna(subset=[text_column])
