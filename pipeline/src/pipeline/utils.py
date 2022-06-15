@@ -405,7 +405,7 @@ def get_word_frequency(df_tweets, text_column, config):
 
     df_word_freq = pd.DataFrame.from_dict(dict_word_freq, orient='index')
 
-    word_freq_filename = f'telegram_word_frequencies_{start_date}_{end_date}'
+    word_freq_filename = f'telegram_word_frequencies_{start_date}_{end_date}.csv'
     word_freq_path = './word_frequencies'
     os.makedirs(word_freq_path, exist_ok=True)
     word_freq_filepath = os.path.join(word_freq_path, word_freq_filename)
