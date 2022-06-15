@@ -284,7 +284,7 @@ def translate_string(row_, translate_client, text_field, model):
         return text
 
 
-def translate_dataframe(df_tweets, text_column, text_column_en, config):
+def translate_dataframe(df_tweets, text_column, text_column_en, config, original_language = None):
 
     model = 'Google'  # default model
     if 'translation-model' in config.keys():
@@ -304,10 +304,14 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config):
         subcription_info = get_secret_keyvault('mscognitive-secret', config)
         subcription_info = json.loads(subcription_info)
         constructed_url = config['mscognitive-url']
+
         params = {
             'api-version': '3.0',
-            'to': ['en']
+            'to': ['en'],
         }
+
+        if original_language:
+            params['from'] = [original_language]
 
         headers = {
             'Ocp-Apim-Subscription-Key': subcription_info["subscription_key"],
@@ -404,6 +408,18 @@ def get_word_frequency(df_tweets, text_column, config):
     }
 
     df_word_freq = pd.DataFrame.from_dict(dict_word_freq, orient='index')
+    df_word_freq.reset_index(inplace=True)
+    df_word_freq.columns = ['Word', 'Frequency']
+    df_word_freq['id'] = df_word_freq.index
+
+    # Delete everything with freq lower then 10
+    df_word_freq = df_word_freq[df_word_freq['Frequency'] >= 500]
+
+    # Add translations
+    df_word_freq = translate_dataframe(df_word_freq, 'Word', 'Translation_Russian', config, original_language='ru')
+    df_word_freq = translate_dataframe(df_word_freq, 'Word', 'Translation_Ukrainian', config, original_language='uk')
+
+    df_word_freq.drop(columns=['id'], inplace=True)
 
     word_freq_filename = f'telegram_word_frequencies_{start_date}_{end_date}.csv'
     word_freq_path = './word_frequencies'
@@ -412,7 +428,7 @@ def get_word_frequency(df_tweets, text_column, config):
     word_freq_blob_path = "word_frequencies"
 
     logging.info(f'Storing word frequencies at {word_freq_path}/{word_freq_filename}')
-    df_word_freq.to_csv(word_freq_filepath)
+    df_word_freq.to_csv(word_freq_filepath, index=False)
 
     logging.info(f'Uploading word frequencies for later use')
     blob_client = get_blob_service_client(os.path.join(word_freq_blob_path, word_freq_filename), config)
