@@ -362,8 +362,11 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
     return df_tweets
 
 
-def get_word_frequency(df_tweets, text_column):
+def get_word_frequency(df_tweets, text_column, config):
     logging.info('Calculating word frequencies')
+
+    start_date = min(df_tweets['date'])
+    end_date = max(df_tweets['date'])
 
     # Get messages
     text = ''.join(df_tweets[text_column].to_string())
@@ -402,11 +405,19 @@ def get_word_frequency(df_tweets, text_column):
 
     df_word_freq = pd.DataFrame.from_dict(dict_word_freq, orient='index')
 
-    word_freq_dir = './word_frequencies'
-    os.makedirs(word_freq_dir, exist_ok=True)
+    word_freq_filename = f'telegram_word_frequencies_{start_date}_{end_date}'
+    word_freq_path = './word_frequencies'
+    os.makedirs(word_freq_path, exist_ok=True)
+    word_freq_filepath = os.path.join(word_freq_path, word_freq_filename)
+    word_freq_blob_path = "word_frequencies"
 
-    logging.info(f'Storing word frequencies at {word_freq_dir}/telegram_word_frequencies.csv')
-    df_word_freq.to_csv(os.path.join(word_freq_dir, 'telegram_word_frequencies.csv'))
+    logging.info(f'Storing word frequencies at {word_freq_path}/{word_freq_filename}')
+    df_word_freq.to_csv(word_freq_filepath)
+
+    logging.info(f'Uploading word frequencies for later use')
+    blob_client = get_blob_service_client(os.path.join(word_freq_blob_path, word_freq_filename), config)
+    with open(word_freq_filepath, "rb") as data:
+        blob_client.upload_blob(data, overwrite=True)
 
     return
 
