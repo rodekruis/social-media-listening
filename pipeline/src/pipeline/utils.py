@@ -350,11 +350,11 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
 
         df_tweets[filter_name] = df_tweets[text_column].apply(
             lambda x:
-            True if any(word in ["КК", "ЧХ"] and
+            True if any(len(word.split()) == 1  and
                         re.search(r"\b" + re.escape(word.lower()) + r"\b", x.lower())
                         for word in keywords)
                 else(
-                    True if any(word not in ["КК", "ЧХ"] and
+                    True if any(len(word.split()) >= 2 and
                                 word.lower() in x.lower()
                                 for word in keywords)
                     else False
