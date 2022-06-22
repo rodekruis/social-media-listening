@@ -278,19 +278,16 @@ def parse_telegram(config):
 
        '''
 
-    start_date = min(df_messages['date'])
-    end_date = max(df_messages['date'])
-    social_media_code = "TL"
-
     # load telegram data
     telegram_data_path = "./telegram"
-    # messages_path = telegram_data_path + \
-    #                 f"/{config['country_code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}_latest.csv"
     messages_path = telegram_data_path + "/telegram_messages_latest.csv"
     df_messages = pd.read_csv(messages_path)
     df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
     next_text_value = 'text'
 
+    start_date = min(df_messages['date'])
+    end_date = max(df_messages['date'])
+    social_media_code = "TL"
 
     # get distribution of words
     if config["get-word-freq"]:
@@ -348,7 +345,7 @@ def parse_telegram(config):
               "id",
               config)
 
-    return f"{config['country-code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}"_all.csv"
+    return f"{config['country-code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}_all.csv"
 
 def merge_sources(data_to_merge, config):
 
