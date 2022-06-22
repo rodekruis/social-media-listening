@@ -345,7 +345,7 @@ def parse_telegram(config):
               "id",
               config)
 
-    return f"{config['country-code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}_all.csv"
+    return f"./telegram/{config['country-code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}_all.csv"
 
 def merge_sources(data_to_merge, config):
 
