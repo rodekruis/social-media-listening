@@ -366,7 +366,7 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
     return df_tweets
 
 
-def get_word_frequency(df_tweets, text_column, config):
+def get_word_frequency(df_tweets, text_column, sm_code, config):
     logging.info('Calculating word frequencies')
 
     start_date = min(df_tweets['date'])
@@ -413,7 +413,11 @@ def get_word_frequency(df_tweets, text_column, config):
     df_word_freq['id'] = df_word_freq.index
 
     # Delete everything with freq lower then 10
-    df_word_freq = df_word_freq[df_word_freq['Frequency'] >= 500]
+    threshold = 20
+    if config['freq-threshold']:
+        threshold = config['freq-threshold']
+
+    df_word_freq = df_word_freq[df_word_freq['Frequency'] >= threshold]
 
     # Add translations
     df_word_freq = translate_dataframe(df_word_freq, 'Word', 'Translation_Russian', config, original_language='ru')
@@ -421,7 +425,7 @@ def get_word_frequency(df_tweets, text_column, config):
 
     df_word_freq.drop(columns=['id'], inplace=True)
 
-    word_freq_filename = f'telegram_word_frequencies_{start_date}_{end_date}.csv'
+    word_freq_filename = f'{config["country-code"]}_{sm_code}_wordfrequencies_{start_date}_{end_date}.csv'
     word_freq_path = './word_frequencies'
     os.makedirs(word_freq_path, exist_ok=True)
     word_freq_filepath = os.path.join(word_freq_path, word_freq_filename)
@@ -512,7 +516,7 @@ def keywords_to_topic(df, df_topics):
     return df
 
 
-def predict_topic(df_tweets, text_column, config, filter_name='all'):
+def predict_topic(df_tweets, text_column, sm_code, config, filter_name='all'):
     logging.info('predicting topic')
     model_filename = f'{config["model-filename"].split(".")[0]}_{filter_name}.{config["model-filename"].split(".")[-1]}'
     keys_to_topic_filename = f'{config["keys-to-topics-filename"].split(".")[0]}_{filter_name}.{config["keys-to-topics-filename"].split(".")[-1]}'
@@ -523,6 +527,9 @@ def predict_topic(df_tweets, text_column, config, filter_name='all'):
     models_blob_path = "models"
     if "model-directory" in config.keys():
         models_blob_path = config["model-directory"]
+
+    start_date = min(df_tweets['date'])
+    end_date = max(df_tweets['date'])
 
     text = df_tweets[text_column]
     text = text[text != 'None'].astype(str)
@@ -613,7 +620,12 @@ def predict_topic(df_tweets, text_column, config, filter_name='all'):
 
     topic_dir = './topics'
     os.makedirs(topic_dir, exist_ok=True)
-    df.to_csv(os.path.join(topic_dir, f'topics_latest_select_{filter_name}.csv'))
+    df.to_csv(
+        os.path.join(
+            topic_dir,
+            f'{config["country-code"]}_{sm_code}_topicslatestselect_{filter_name}_{start_date}_{end_date}.csv'
+        )
+    )
 
     if not refit:
         # assign topic to tweets

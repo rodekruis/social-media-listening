@@ -278,16 +278,23 @@ def parse_telegram(config):
 
        '''
 
+    start_date = min(df_messages['date'])
+    end_date = max(df_messages['date'])
+    social_media_code = "TL"
+
     # load telegram data
     telegram_data_path = "./telegram"
-    messages_path = telegram_data_path + "/messages_processed_latest.csv"
+    # messages_path = telegram_data_path + \
+    #                 f"/{config['country_code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}_latest.csv"
+    messages_path = telegram_data_path + "/telegram_messages_latest.csv"
     df_messages = pd.read_csv(messages_path)
     df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
-    next_text_value = 'full_text_en'
+    next_text_value = 'text'
+
 
     # get distribution of words
     if config["get-word-freq"]:
-        get_word_frequency(df_messages, next_text_value)
+        get_word_frequency(df_messages, next_text_value, social_media_code, config)
 
     if config["filter-by-keywords"]:
         keyword_files = config["keyword-files"]
@@ -328,19 +335,20 @@ def parse_telegram(config):
             (df_messages["cva"]) &
             (pd.to_datetime(df_messages['date']) >= pd.to_datetime('2022-04-28'))
             ]
-        df_messages_1 = predict_topic(df_messages_1, next_text_value, config, "cva")
+        df_messages_1 = predict_topic(df_messages_1, next_text_value, social_media_code, config, "cva")
         # analyse topic RED CROSS and not CVA
         df_messages_2 = df_messages[(df_messages["rcrc"]) & (~df_messages["cva"])]
-        df_messages_2 = predict_topic(df_messages_2, next_text_value, config, "rcrc")
-        # # analyse topic PGI
-        df_messages_3 = df_messages[df_messages["pgi"]]
-        df_messages_3 = predict_topic(df_messages_3, next_text_value, config, topic_3)
+        df_messages_2 = predict_topic(df_messages_2, next_text_value, social_media_code, config, "rcrc")
         # merge all into one single df
         df_messages = df_messages_1.append(df_messages_2, ignore_index=True)
-        df_messages = df_messages.append(df_messages_3, ignore_index=True)
 
-    save_data("messages_processed", "telegram", df_messages, "id", config)
-    return "./telegram/messages_processed_all.csv"
+    save_data(f"{config['country-code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}",
+              "telegram",
+              df_messages,
+              "id",
+              config)
+
+    return "f"{config['country-code']}_{social_media_code}_messagesprocessed_{start_date}_{end_date}"_all.csv"
 
 def merge_sources(data_to_merge, config):
 
