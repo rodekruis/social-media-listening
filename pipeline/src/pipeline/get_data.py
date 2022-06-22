@@ -279,8 +279,8 @@ def get_telegram(config):
     logging.info("Telegram client connected")
 
     telegram_channels = config["telegram-channels"]
-    today = datetime.datetime.today().date()
-    start_date = today - pd.Timedelta(days=14)
+    end_date = datetime.datetime.today().date()
+    start_date = end_date - pd.Timedelta(days=14)
 
     df_messages = pd.DataFrame()
     for channel in telegram_channels:
@@ -303,6 +303,12 @@ def get_telegram(config):
     # Add index column
     df_messages.reset_index(inplace=True)
     df_messages['id'] = df_messages.index
+    df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
 
     logging.info("Saving Telegram data")
-    save_data("telegram_messages", "telegram", df_messages, "id", config)
+    save_data(f"{config['country-code']}_TL_messages_{start_date}_{end_date}",
+              "telegram",
+              df_messages,
+              "id",
+              config)
+

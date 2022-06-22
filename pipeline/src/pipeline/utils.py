@@ -516,7 +516,7 @@ def keywords_to_topic(df, df_topics):
     return df
 
 
-def predict_topic(df_tweets, text_column, sm_code, config, filter_name='all'):
+def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config, filter_name='all'):
     logging.info('predicting topic')
     model_filename = f'{config["model-filename"].split(".")[0]}_{filter_name}.{config["model-filename"].split(".")[-1]}'
     keys_to_topic_filename = f'{config["keys-to-topics-filename"].split(".")[0]}_{filter_name}.{config["keys-to-topics-filename"].split(".")[-1]}'
@@ -527,9 +527,6 @@ def predict_topic(df_tweets, text_column, sm_code, config, filter_name='all'):
     models_blob_path = "models"
     if "model-directory" in config.keys():
         models_blob_path = config["model-directory"]
-
-    start_date = min(df_tweets['date'])
-    end_date = max(df_tweets['date'])
 
     text = df_tweets[text_column]
     text = text[text != 'None'].astype(str)
