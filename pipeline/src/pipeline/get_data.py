@@ -7,6 +7,7 @@ from google.oauth2 import service_account
 import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
 from telethon.sessions import StringSession
+from telethon.tl.functions.channels import GetFullChannelRequest
 from pipeline.utils import get_blob_service_client, get_secret_keyvault, save_data
 import logging
 import datetime
@@ -280,11 +281,18 @@ def get_telegram(config):
 
     telegram_channels = config["telegram-channels"]
     end_date = datetime.datetime.today().date()
-    start_date = end_date - pd.Timedelta(days=14)
+    start_date = end_date - pd.Timedelta(days=1)
 
     df_messages = pd.DataFrame()
+    df_member_counts = pd.DataFrame()
     for channel in telegram_channels:
         channel_entity = telegram_client.get_entity(channel)
+        channel_full_info = telegram_client(GetFullChannelRequest(channel=channel_entity))
+        
+        idx = len(df_member_counts)
+        df_member_counts.at[idx, 'source'] = channel
+        member_count = channel_full_info.full_chat.participants_count
+        df_member_counts.at[idx, 'member_count'] = member_count
 
         for message in telegram_client.iter_messages(
             channel_entity,
@@ -297,10 +305,14 @@ def get_telegram(config):
             df_messages.at[ix, "text"] = message.text
             df_messages.at[ix, "datetime"] = message.date
 
+        df_member_counts.at[idx, 'message_count'] = ix
+
     telegram_client.disconnect()
     logging.info("Telegram client disconnected")
 
     # Add index column
+    df_member_counts.reset_index(inplace=True)
+    df_member_counts['id'] = df_member_counts.index
     df_messages.reset_index(inplace=True)
     df_messages['id'] = df_messages.index
     df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
@@ -309,6 +321,11 @@ def get_telegram(config):
     save_data(f"{config['country-code']}_TL_messages_{start_date}_{end_date}",
               "telegram",
               df_messages,
+              "id",
+              config)
+    save_data(f"{config['country-code']}_TL_membercount_{start_date}_{end_date}",
+              "telegram",
+              df_member_counts,
               "id",
               config)
 

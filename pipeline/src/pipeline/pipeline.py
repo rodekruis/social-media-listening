@@ -165,11 +165,11 @@ def main(config, keep):
             traceback.print_exception(*sys.exc_info())
 
     if config["track-telegram-groups"]:
-        # try:
-        #     get_telegram(config)
-        # except Exception as e:
-        #     logging.error(f"in getting telegram data: {e}")
-        #     traceback.print_exception(*sys.exc_info())
+        try:
+            get_telegram(config)
+        except Exception as e:
+            logging.error(f"in getting telegram data: {e}")
+            traceback.print_exception(*sys.exc_info())
         try:
             data_telegram = parse_telegram(config)
             data_to_merge.append(data_telegram)

@@ -265,18 +265,6 @@ def parse_youtube(config):
     return "./youtube/videos_processed_all.csv"
 
 def parse_telegram(config):
-    '''
-       1: Load scraped messages
-       2: Filter messages with RED CROSS key words in UK or RU, column: 'is_ru_uk' True/False
-       3: Translate all messages to EN
-       4: Run sentiment analysis in all EN messages
-       5: Filter messages in 2-True with CVA keywords, column: 'is_cva' True/False
-       6: Filter messages in 2-False with PGI keywords, column: 'is_pgi' True/False
-       TODO: Run topic model each group in 5 and 6
-       8: Merge messages of each group
-       9: Save to AZ
-
-       '''
 
     end_date = datetime.datetime.today().date()
     start_date = end_date - pd.Timedelta(days=14)
@@ -328,8 +316,7 @@ def parse_telegram(config):
         # analyse topic RED CROSS and CVA
         df_messages_1 = df_messages[
             (df_messages["rcrc"]) &
-            (df_messages["cva"]) &
-            (pd.to_datetime(df_messages['date']) >= pd.to_datetime('2022-04-28'))
+            (df_messages["cva"])
             ]
         df_messages_1 = predict_topic(df_messages_1, next_text_value, sm_code, start_date, end_date, config, "cva")
         # analyse topic RED CROSS and not CVA
