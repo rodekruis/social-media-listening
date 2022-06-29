@@ -590,19 +590,23 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
     # create dataframe with best example per topic and topic description
     logging.info('create dataframe with best example per topic and topic description')
     df = pd.DataFrame()
+
     for topic_num, topic in enumerate(topic_list_human_readable):
         text_topic = text[text.topic_num == topic_num].sort_values(by=['score'], ascending=False).reset_index()
         frequency = len(text[text.topic_num == topic_num]) / len_original
         responses = len(text[text.topic_num == topic_num])
         if not text_topic.empty:
-            representative_text = ';'.join(text_topic.iloc[:10]['text'].values.tolist())
+            representative_texts = text_topic.iloc[:10]['text'].tolist()
 
-            df = df.append(pd.Series({"topic number": int(topic_num),
-                                      "example": representative_text,
-                                      "keywords": ', '.join(topic),
-                                      "frequency (%)": frequency * 100.,
-                                      "number of responses": responses}), ignore_index=True)
+            for rep_text in representative_texts:
+                df = df.append(pd.Series({"topic number": int(topic_num),
+                                          "example": rep_text,
+                                          "keywords": ', '.join(topic),
+                                          "frequency (%)": frequency * 100.,
+                                          "number of responses": responses}), ignore_index=True)
+
     df = df.sort_values(by=['frequency (%)'], ascending=False)
+    df = df[['topic number', 'example', 'keywords', 'frequency (%)', 'number of responses']]
 
     if not refit:
         # add topic descriptions and save topics locally
@@ -621,7 +625,9 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
         os.path.join(
             topic_dir,
             f'{config["country-code"]}_{sm_code}_topicslatestselect_{filter_name}_{start_date}_{end_date}.csv'
-        )
+        ),
+        index=False,
+        decimal=','
     )
 
     if not refit:
