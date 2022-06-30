@@ -361,19 +361,22 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
                 )
         )
 
+        df_tweets['PII'] = df_tweets['full_text_en'].apply(lambda x: re.match(r'.\d\d\d\d\d+', x))
+
     # df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
     logging.info("Done with filtering")
     return df_tweets
 
 
-def get_word_frequency(df_tweets, text_column, sm_code, config):
+def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, config):
     logging.info('Calculating word frequencies')
 
-    start_date = min(df_tweets['date'])
-    end_date = max(df_tweets['date'])
-
     # Get messages
-    text = ''.join(df_tweets[text_column].to_string())
+    df_tweets[text_column] = df_tweets[text_column].astype(str)
+    text = ''
+
+    for msg_text in df_tweets['text']:
+        text = text + msg_text
 
     # Remove Punctuation
     text = re.sub(r"[^\w\s]", "", text)

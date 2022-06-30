@@ -278,7 +278,7 @@ def parse_telegram(config):
 
     # get distribution of words
     if config["get-word-freq"]:
-        get_word_frequency(df_messages, next_text_value, sm_code, config)
+        get_word_frequency(df_messages, next_text_value, sm_code, start_date, end_date, config)
 
     if config["filter-by-keywords"]:
         keyword_files = config["keyword-files"]
