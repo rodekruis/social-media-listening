@@ -293,6 +293,7 @@ def get_telegram(config):
         df_member_counts.at[idx, 'source'] = channel
         member_count = channel_full_info.full_chat.participants_count
         df_member_counts.at[idx, 'member_count'] = member_count
+        df_member_counts.at[idx, 'date'] = end_date
 
         for message in telegram_client.iter_messages(
             channel_entity,

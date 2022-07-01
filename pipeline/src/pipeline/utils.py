@@ -361,7 +361,7 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
                 )
         )
 
-        df_tweets['PII'] = df_tweets['full_text_en'].apply(lambda x: re.match(r'.\d\d\d\d\d+', x))
+        # df_tweets['PII'] = df_tweets['text'].apply(lambda x: re.match(r'.\d\d\d\d\d+', x))
 
     # df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
     logging.info("Done with filtering")
@@ -653,7 +653,7 @@ def save_data(name, directory, data, id, config):
 
     os.makedirs(f"./{directory}", exist_ok=True)
     tweets_path = f"./{directory}/{name}_latest.csv"
-    data.to_csv(tweets_path, index=False)
+    data.to_csv(tweets_path, index=False, encoding="utf-8")
 
     # upload to datalake
     if not config["skip-datalake"]:
@@ -662,20 +662,24 @@ def save_data(name, directory, data, id, config):
             blob_client.upload_blob(upload_file, overwrite=True)
 
     # append to existing twitter dataframe
+    final_table_columns = ["index", "source", "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
+    data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)    
+    if containsNumber(name):
+       name = "_".join(name.split('_')[0:3])
     data_all_path = f"./{directory}/{name}_all.csv"
     try:
         if not config["skip-datalake"]:
             blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
             with open(data_all_path, "wb") as download_file:
                 download_file.write(blob_client.download_blob().readall())
-        data_old = pd.read_csv(data_all_path, lines=True)
+        data_old = pd.read_csv(data_all_path)#, lines=True)
         data_all = data_old.append(data, ignore_index=True)
     except:
         data_all = data.copy()
 
     # drop duplicates and save
     data_all = data_all.drop_duplicates(subset=[id])
-    data_all.to_csv(data_all_path, index=False)
+    data_all.to_csv(data_all_path, index=False, encoding="utf-8")
 
     # upload to datalake
     if not config["skip-datalake"]:
@@ -684,6 +688,11 @@ def save_data(name, directory, data, id, config):
             blob_client.upload_blob(upload_file, overwrite=True)
 
 
+def containsNumber(string):
+    for character in string:
+        if character.isdigit():
+            return True
+    return False
 
 
 

@@ -264,6 +264,7 @@ def parse_youtube(config):
     save_data("videos_processed", "youtube", df_videos, "id", config)
     return "./youtube/videos_processed_all.csv"
 
+
 def parse_telegram(config):
 
     end_date = datetime.datetime.today().date()
@@ -331,7 +332,8 @@ def parse_telegram(config):
               "id",
               config)
 
-    return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}_all.csv"
+    return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"
+
 
 def merge_sources(data_to_merge, config):
 
