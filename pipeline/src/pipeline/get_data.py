@@ -286,30 +286,30 @@ def get_telegram(config):
     df_messages = pd.DataFrame()
     df_member_counts = pd.DataFrame()
     for channel in telegram_channels:
-        channel_entity = telegram_client.get_entity(channel)
-        channel_full_info = telegram_client(GetFullChannelRequest(channel=channel_entity))
-        
-        idx = len(df_member_counts)
-        df_member_counts.at[idx, 'source'] = channel
-        member_count = channel_full_info.full_chat.participants_count
-        df_member_counts.at[idx, 'member_count'] = member_count
-        df_member_counts.at[idx, 'date'] = end_date
+        try:
+            channel_entity = telegram_client.get_entity(channel)
+            channel_full_info = telegram_client(GetFullChannelRequest(channel=channel_entity))
+            
+            idx = len(df_member_counts)
+            df_member_counts.at[idx, 'source'] = channel
+            member_count = channel_full_info.full_chat.participants_count
+            df_member_counts.at[idx, 'member_count'] = member_count
+            df_member_counts.at[idx, 'date'] = end_date
 
-        for message in telegram_client.iter_messages(
-            channel_entity,
-            offset_date=start_date,
-            reverse=True
-        ):
+            for message in telegram_client.iter_messages(
+                channel_entity,
+                offset_date=start_date,
+                reverse=True
+            ):
 
-            ix = len(df_messages)
-            df_messages.at[ix, "source"] = channel
-            df_messages.at[ix, "text"] = message.text
-            df_messages.at[ix, "datetime"] = message.date
+                ix = len(df_messages)
+                df_messages.at[ix, "source"] = channel
+                df_messages.at[ix, "text"] = message.text
+                df_messages.at[ix, "datetime"] = message.date
 
-        df_member_counts.at[idx, 'message_count'] = ix
-
-    telegram_client.disconnect()
-    logging.info("Telegram client disconnected")
+            df_member_counts.at[idx, 'message_count'] = ix
+        except Exception as e:
+            logging.error(f"in getting in telegram channel {channel}: {e}")
 
     # Add index column
     df_member_counts.reset_index(inplace=True)
@@ -330,3 +330,5 @@ def get_telegram(config):
               "id",
               config)
 
+    telegram_client.disconnect()
+    logging.info("Telegram client disconnected")
