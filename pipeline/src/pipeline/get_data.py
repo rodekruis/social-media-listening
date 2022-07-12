@@ -217,26 +217,38 @@ def get_facebook(config):
     facebook_secrets = get_secret_keyvault('facebook-secret', config)
     facebook_secrets = json.loads(facebook_secrets)
     graph = facebook.GraphAPI(
-        access_token=facebook_secrets["token"],
-        version="3.1")
+        access_token=facebook_secrets["token"])#,
+        #version="3.1")
+    reaction_types = ['LIKE', 'LOVE', 'WOW', 'HAHA', 'SORRY', 'ANGRY', \
+        'THANKFUL', 'PRIDE', 'CARE', 'FIRE', 'HUNDRED']
 
     # get all comments to posts
     df_posts = pd.DataFrame()
     df_comments = pd.DataFrame()
 
     page_posts = graph.get_object(id=facebook_secrets["page"], fields="feed")['feed']
+    # print(page_posts)
     while True:
         for post in page_posts['data']:
-            stats = graph.get_object(id=post["id"], fields="message,shares,likes.summary(true)")
-            stats_to_save = {'id_post': stats['id']}
+            # print(post)
+            stats_to_save = {'id_post': post["id"]}
+            stats_to_save['source'] = facebook_secrets["page"]
+            # stats_to_save['id_comment'] = 0
+            stats_to_save['datetime'] =  post['updated_time']
+            stats = graph.get_object(id=post["id"], fields="message,shares,reactions.summary(true)")
+            # print(stats)
             if 'message' in stats.keys():
-                stats_to_save['message'] = stats['message']
-            if 'shares' in stats.keys():
-                stats_to_save['shares'] = stats['shares']['count']
-            if 'likes' in stats.keys():
-                stats_to_save['like_count'] = stats['likes']['summary']['total_count']
+                stats_to_save['text'] = stats['message']
+            # if 'shares' in stats.keys():
+            #     stats_to_save['shares'] = stats['shares']['count']
+            # if 'reactions' in stats.keys():
+            #     stats_to_save['reaction_count'] = stats['reactions']['summary']['total_count']
+            #     if stats['reactions']['summary']['viewer_reaction'] in reaction_types:
+            #         for reaction in [stats['reactions']['summary']['viewer_reaction']]:
+            #             stats_to_save[reaction.lower()] = stats['reactions']['summary']['total_count']
             # better, use reactions.type(TYPE).summary(total_count) for TYPE=LIKE, LOVE, WOW, HAHA, SORRY, ANGRY
             # print(stats_to_save)
+            stats_to_save['post'] = True
             df_posts = df_posts.append(pd.Series(stats_to_save), ignore_index=True)
 
             comments = {'data': []}
@@ -247,21 +259,66 @@ def get_facebook(config):
 
             while True:
                 for comment in comments['data']:
-                    stats = graph.get_object(id=comment["id"], fields="message,from,like_count")
-                    stats['id_comment'] = stats.pop('id')
-                    stats['id_post'] = post["id"]
-                    df_comments = df_comments.append(pd.Series(stats), ignore_index=True)
+                    # print(comment)
+                    stats = graph.get_object(id=comment["id"], fields="message,from,reactions.summary(true)")#like_count")
+                    # print(stats)
+                    stats_to_save = {'id_post': post["id"]}
+                    stats_to_save['source'] = facebook_secrets["page"]
+                    # stats_to_save['id_comment'] = stats['id']
+                    stats_to_save['datetime'] = comment['created_time']
+                    stats_to_save['text'] = stats['text']
+                    stats_to_save['post'] = False
+                    # stats_to_save['reaction_count'] = stats['reactions']['summary']['total_count']
+                    # if stats['reactions']['summary']['viewer_reaction'] in reaction_types:
+                    #     for reaction in [stats['reactions']['summary']['viewer_reaction']]:
+                    #         stats_to_save[reaction.lower()] = stats['reactions']['summary']['total_count']
+                    # print(stats_to_save)
+                    df_comments = df_comments.append(pd.Series(stats_to_save), ignore_index=True)
+
+                    while True:
+                        for comment in comments['data']:
+                            # print(comment)
+                            stats = graph.get_object(id=comment["id"], fields="message,from,reactions.summary(true)")#like_count")
+                            # print(stats)
+                            stats_to_save = {'id_post': post["id"]}
+                            stats_to_save['source'] = facebook_secrets["page"]
+                            # stats_to_save['id_comment'] = stats['id']
+                            stats_to_save['datetime'] = comment['created_time']
+                            stats_to_save['text'] = stats['text']
+                            stats_to_save['post'] = False
+                            # stats_to_save['reaction_count'] = stats['reactions']['summary']['total_count']
+                            # if stats['reactions']['summary']['viewer_reaction'] in reaction_types:
+                            #     for reaction in [stats['reactions']['summary']['viewer_reaction']]:
+                            #         stats_to_save[reaction.lower()] = stats['reactions']['summary']['total_count']
+                            # print(stats_to_save)
+                            df_comments = df_comments.append(pd.Series(stats_to_save), ignore_index=True)
+                            
+                            try:
+                                comments = requests.get(comments["paging"]["next"]).json()
+                                # print(comments)
+                            except KeyError:
+                                break
+
                 try:
                     comments = requests.get(comments["paging"]["next"]).json()
+                    # print(comments)
                 except KeyError:
                     break
+            
+            df_posts = df_posts.append(df_comments)
+            
 
         try:
             page_posts = requests.get(page_posts["paging"]["next"]).json()
         except KeyError:
             break
+    
+    df_posts.reset_index(inplace=True)
+    df_posts['id'] = df_posts.index
 
-    save_data("facebook_comments", "facebook", df_comments, "id_comment", config)
+    save_data("facebook_posts", "facebook", df_posts, "id", config)
+    # save_data("facebook_comments", "facebook", df_comments, "id_comment", config)
+
 
 def get_telegram(config):
 
@@ -296,18 +353,33 @@ def get_telegram(config):
             df_member_counts.at[idx, 'member_count'] = member_count
             df_member_counts.at[idx, 'date'] = end_date
 
+            df_replies = pd.DataFrame()
             for message in telegram_client.iter_messages(
                 channel_entity,
                 offset_date=start_date,
                 reverse=True
             ):
-
                 ix = len(df_messages)
+                message_id = message.id
                 df_messages.at[ix, "source"] = channel
+                df_messages.at[ix, "id_post"] = message_id
                 df_messages.at[ix, "text"] = message.text
                 df_messages.at[ix, "datetime"] = message.date
+                df_messages.at[ix, "post"] = message.post
+                if message.replies:
+                    for reply in telegram_client.iter_messages(
+                        channel_entity,
+                        reply_to=message_id
+                    ):
+                        ix_reply = len(df_replies)
+                        df_replies.at[ix_reply, "source"] = channel
+                        df_replies.at[ix_reply, "id_post"] = message_id
+                        df_replies.at[ix_reply, "text"] = reply.text
+                        df_replies.at[ix_reply, "datetime"] = reply.date
+                        df_replies.at[ix_reply, "post"] = reply.post
+                    df_messages = df_messages.append(df_replies, ignore_index=True)
 
-            df_member_counts.at[idx, 'message_count'] = ix
+            df_member_counts.at[idx, 'message_count'] = len(df_messages)
         except Exception as e:
             logging.error(f"in getting in telegram channel {channel}: {e}")
 

@@ -269,10 +269,12 @@ def parse_telegram(config):
 
     end_date = datetime.datetime.today().date()
     start_date = end_date - pd.Timedelta(days=14)
+    # end_date = "2022-07-06"
+    # start_date = "2022-06-22"
 
     # load telegram data
     telegram_data_path = "./telegram"
-    messages_path = telegram_data_path + f"/{config['country-code']}_TL_messages_{start_date}_{end_date}_latest.csv"
+    messages_path = telegram_data_path + f"/{config['country-code']}_TL_messages_{start_date}_{end_date}_extra_latest.csv"
     df_messages = pd.read_csv(messages_path)
     next_text_value = 'text'
     sm_code = "TL"
@@ -293,10 +295,30 @@ def parse_telegram(config):
 
     # translate telegram messages
     if config["translate"]:
-        df_to_translate = df_messages[(df_messages["rcrc"])]
+        df_to_translate = df_messages[
+            (df_messages["rcrc"]) | 
+            (df_messages["cva"]) |
+            (df_messages["admin"]) |
+            (df_messages["anomaly"]) |
+            (df_messages["cash"]) |
+            (df_messages["food"]) |
+            (df_messages["help"]) |
+            (df_messages["human"]) |
+            (df_messages["location"]) |
+            (df_messages["movement"]) |
+            (df_messages["question"]) |
+            (df_messages["time"]) |
+            (df_messages["war"]) |
+            (df_messages["work"])
+        ]
         df_messages = translate_dataframe(df_to_translate, next_text_value, 'full_text_en', config)
         next_text_value = 'full_text_en'
-    # save_data("messages_translated", "telegram", df_messages, "id", config)
+    
+        save_data(f"{config['country-code']}_{sm_code}_messagestranslated_{start_date}_{end_date}",
+                "telegram",
+                df_messages,
+                "id",
+                config)
 
     # sentiment analysis
     if config["analyse-sentiment"]:
@@ -326,13 +348,13 @@ def parse_telegram(config):
         # merge all into one single df
         df_messages = df_messages_1.append(df_messages_2, ignore_index=True)
 
-    save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
-              "telegram",
-              df_messages,
-              "id",
-              config)
+        save_data(f"{config['country-code']}_{sm_code}_messagestopics_{start_date}_{end_date}",
+                "telegram",
+                df_messages,
+                "id",
+                config)
 
-    return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"
+    return f"./telegram/{config['country-code']}_{sm_code}_messagestopics_all.csv"
 
 
 def merge_sources(data_to_merge, config):

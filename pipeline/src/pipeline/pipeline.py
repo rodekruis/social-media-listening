@@ -125,7 +125,7 @@ def main(config, keep):
             logging.error(f"in parsing kobo data: {e}")
             traceback.print_exception(*sys.exc_info())
 
-    if config["track-facebook-comments"]:
+    if config["track-facebook-groups"]:
         try:
             get_facebook(config)
         except Exception as e:
