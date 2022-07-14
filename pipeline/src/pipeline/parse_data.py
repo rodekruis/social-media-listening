@@ -31,7 +31,6 @@ def get_url_from_tweet(row):
 
 
 def parse_azure_table(df, config):
-
     next_text_value = config["text-field-azure-table"]
 
     if type(next_text_value) != str and len(next_text_value) > 0:
@@ -59,12 +58,12 @@ def parse_azure_table(df, config):
     # geolocate
     if config["geolocate"]:
         df = geolocate_dataframe(df,
-                                config['geodata-locations'],
-                                config['geodata-country-boundaries'],
-                                config['location-input'],
-                                config['location-output'],
-                                [next_text_value],
-                                config)
+                                 config['geodata-locations'],
+                                 config['geodata-country-boundaries'],
+                                 config['location-input'],
+                                 config['location-output'],
+                                 [next_text_value],
+                                 config)
 
     # sentiment analysis
     if config["analyse-sentiment"]:
@@ -78,7 +77,6 @@ def parse_azure_table(df, config):
 
 
 def parse_facebook(config):
-
     # load and parse facebook comments
     data_dir = "./facebook"
     data_path = data_dir + "/facebook_comments_latest.csv"
@@ -101,13 +99,13 @@ def parse_facebook(config):
     # geolocate
     if config["geolocate"]:
         df_fb = geolocate_dataframe(df_fb,
-                                  config['geodata-locations'],
-                                  config['geodata-country-boundaries'],
-                                  config['location-input'],
-                                  config['location-output'],
-                                  [next_text_value],
-                                  config,
-                                  'place')
+                                    config['geodata-locations'],
+                                    config['geodata-country-boundaries'],
+                                    config['location-input'],
+                                    config['location-output'],
+                                    [next_text_value],
+                                    config,
+                                    'place')
 
     # sentiment analysis
     if config["analyse-sentiment"]:
@@ -122,7 +120,6 @@ def parse_facebook(config):
 
 
 def parse_kobo(config):
-
     # load and parse tweets
     kobo_data_path = "./kobo"
     form_data_path = kobo_data_path + "/form_data_latest.csv"
@@ -166,7 +163,6 @@ def parse_kobo(config):
 
 
 def parse_twitter(config):
-
     # load and parse tweets
     twitter_data_path = "./twitter"
     tweets_path = twitter_data_path + "/tweets_latest.csv"
@@ -232,7 +228,6 @@ def parse_twitter(config):
 
 
 def parse_youtube(config):
-
     # load and parse youtube
     youtube_data_path = "./youtube"
     videos_path = youtube_data_path + "/videos_latest.csv"
@@ -266,7 +261,6 @@ def parse_youtube(config):
 
 
 def parse_telegram(config):
-
     end_date = datetime.datetime.today().date()
     start_date = end_date - pd.Timedelta(days=14)
     # end_date = "2022-07-06"
@@ -274,14 +268,26 @@ def parse_telegram(config):
 
     # load telegram data
     telegram_data_path = "./telegram"
-    messages_path = telegram_data_path + f"/{config['country-code']}_TL_messages_{start_date}_{end_date}_extra_latest.csv"
+    messages_path = telegram_data_path + f"/{config['country-code']}_TL_messages_{start_date}_{end_date}_latest.csv"
     df_messages = pd.read_csv(messages_path)
-    next_text_value = 'text'
     sm_code = "TL"
 
-    # get distribution of words
+    # Combine text of post and replies
+    df_messages['text_post'] = df_messages['text_post'].fillna("")
+    df_messages['text_reply'] = df_messages['text_reply'].fillna("")
+
+    # Column that  takes the post text if message is post, else the reply text (needed for word frequencies)
+    df_messages['text_combined'] = np.where(
+            df_messages['post'],
+            df_messages['text_post'],
+            df_messages['text_reply']
+        )
+    # Column that merges the post and reply text (needed for filtering on keywords)
+    df_messages['text_merged'] = df_messages['text_post'] + " " + df_messages['text_reply']
+
+    # get distribution of wordss
     if config["get-word-freq"]:
-        get_word_frequency(df_messages, next_text_value, sm_code, start_date, end_date, config)
+        get_word_frequency(df_messages, 'text_combined', sm_code, start_date, end_date, config)
 
     if config["filter-by-keywords"]:
         keyword_files = config["keyword-files"]
@@ -291,34 +297,43 @@ def parse_telegram(config):
 
             df_keywords = pd.read_csv(f"../config/{file}")
             keywords = df_keywords.dropna()['keyword'].tolist()
-            df_messages = filter_by_keywords(df_messages, [next_text_value], keywords, topic)
+            df_messages = filter_by_keywords(df_messages, ['text_merged'], keywords, topic)
+
+    # Remove combined and merged text columns
+    df_messages = df_messages.drop(columns=['text_combined', 'text_merged'])
 
     # translate telegram messages
     if config["translate"]:
-        df_to_translate = df_messages[
-            (df_messages["rcrc"]) | 
-            (df_messages["cva"]) |
-            (df_messages["admin"]) |
-            (df_messages["anomaly"]) |
-            (df_messages["cash"]) |
-            (df_messages["food"]) |
-            (df_messages["help"]) |
-            (df_messages["human"]) |
-            (df_messages["location"]) |
-            (df_messages["movement"]) |
-            (df_messages["question"]) |
-            (df_messages["time"]) |
-            (df_messages["war"]) |
-            (df_messages["work"])
-        ]
-        df_messages = translate_dataframe(df_to_translate, next_text_value, 'full_text_en', config)
-        next_text_value = 'full_text_en'
-    
-        save_data(f"{config['country-code']}_{sm_code}_messagestranslated_{start_date}_{end_date}",
-                "telegram",
-                df_messages,
-                "id",
-                config)
+        keyword_files = config["keyword-files"]
+
+        topics = []
+        for file in keyword_files:
+            topic = file.split("_")[0]
+            topics.append(topic)
+
+        df_to_translate = pd.DataFrame()
+
+        for topic in topics:
+            if df_to_translate.empty:
+                df_to_translate = df_messages[df_messages[topic]]
+            else:
+                df_to_translate = pd.concat(
+                    [df_to_translate, df_messages[df_messages[topic]]]).drop_duplicates().reset_index(drop=True)
+
+        df_messages = translate_dataframe(
+            df_to_translate,
+            ['text_post', 'text_reply'],
+            ['text_post_en', 'text_reply_en'],
+            config
+        )
+
+        df_messages['text_post_en'] = df_messages['text_post_en'].fillna(method='ffill')
+
+        # save_data(f"{config['country-code']}_{sm_code}_messagestranslated_{start_date}_{end_date}",
+        #           "telegram",
+        #           df_messages,
+        #           "id",
+        #           config)
 
     # sentiment analysis
     if config["analyse-sentiment"]:
@@ -336,29 +351,38 @@ def parse_telegram(config):
 
     # topic analysis
     if config["analyse-topic"]:
+        # Create combined translated text column to train model on
+        df_messages['text_combined_en'] = np.where(
+            df_messages['post'],
+            df_messages['text_post_en'],
+            df_messages['text_reply_en']
+        )
+
         # analyse topic RED CROSS and CVA
         df_messages_1 = df_messages[
             (df_messages["rcrc"]) &
             (df_messages["cva"])
             ]
-        df_messages_1 = predict_topic(df_messages_1, next_text_value, sm_code, start_date, end_date, config, "cva")
+        df_messages_1 = predict_topic(df_messages_1, 'text_combined_en', sm_code, start_date, end_date, config, "cva")
         # analyse topic RED CROSS and not CVA
         df_messages_2 = df_messages[(df_messages["rcrc"]) & (~df_messages["cva"])]
-        df_messages_2 = predict_topic(df_messages_2, next_text_value, sm_code, start_date, end_date, config, "rcrc")
+        df_messages_2 = predict_topic(df_messages_2, 'text_combined_en', sm_code, start_date, end_date, config, "rcrc")
         # merge all into one single df
         df_messages = df_messages_1.append(df_messages_2, ignore_index=True)
 
+        # Drop combined translated text column
+        df_messages = df_messages.drop(columns=['text_combined_en'])
+
         save_data(f"{config['country-code']}_{sm_code}_messagestopics_{start_date}_{end_date}",
-                "telegram",
-                df_messages,
-                "id",
-                config)
+                  "telegram",
+                  df_messages,
+                  "id",
+                  config)
 
     return f"./telegram/{config['country-code']}_{sm_code}_messagestopics_all.csv"
 
 
 def merge_sources(data_to_merge, config):
-
     # merge everything
     merged_data_path = "./merged"
     os.makedirs(merged_data_path, exist_ok=True)
@@ -383,7 +407,6 @@ def merge_sources(data_to_merge, config):
 
 
 def prepare_final_dataset(blob_service_client):
-
     logging.info('prepare_final_dataset: merging')
     in_file = './tweets/tweets_latest_topic.csv'
     if not os.path.exists(in_file):
@@ -395,7 +418,8 @@ def prepare_final_dataset(blob_service_client):
     df_tweets['created_at'] = df_tweets['created_at'].dt.date
     df_tweets['full_text_clean'] = df_tweets['full_text_clean'].str.replace(': ', '')
     df_tweets['full_text_en'] = df_tweets['full_text_en'].str.replace(': ', '')
-    df_tweets = df_tweets[(~df_tweets['full_text_clean'].str.contains('#NAME?')) & (~df_tweets['full_text_en'].str.contains('#NAME?'))]
+    df_tweets = df_tweets[
+        (~df_tweets['full_text_clean'].str.contains('#NAME?')) & (~df_tweets['full_text_en'].str.contains('#NAME?'))]
 
     if len(df_tweets) > df_tweets.id.nunique():
         logging.info('re-assigning id')
@@ -434,7 +458,6 @@ def prepare_final_dataset(blob_service_client):
     week_ago = today - datetime.timedelta(days=7)
     reference_filename = 'powerbi_' + today.strftime("%d-%m-%Y") + '_' + week_ago.strftime("%d-%m-%Y") + '.xlsx'
     blob_client = blob_service_client.get_blob_client(container='covid-nam-rumor-tracker',
-                                                      blob='powerbi/'+reference_filename)
+                                                      blob='powerbi/' + reference_filename)
     with open('./powerbi/powerbi_latest.xlsx', "rb") as data:
         blob_client.upload_blob(data, overwrite=True)
-

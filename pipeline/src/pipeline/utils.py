@@ -77,7 +77,8 @@ def preprocess(text):
 def produce_mapping(mapping_list):
     mapping_pairs = pd.concat([pd.DataFrame([(k, v) for k, v in d.items()]) for d in mapping_list])
     mapping_pairs['count'] = 1
-    mapping121 = mapping_pairs.groupby(by=[0, 1]).count().reset_index().sort_values(by=[0, 'count'], ascending=False).groupby(by=0).head(1)
+    mapping121 = mapping_pairs.groupby(by=[0, 1]).count().reset_index().sort_values(by=[0, 'count'],
+                                                                                    ascending=False).groupby(by=0).head(1)
     mapping12many = mapping_pairs.drop(columns=['count']).drop_duplicates()
     return mapping121, mapping12many
 
@@ -117,7 +118,7 @@ def match_location(x, gdf, target_column, loc_column, locations):
         gdf_x = gpd.GeoDataFrame(pd.DataFrame(x).transpose(), geometry='coord', crs="EPSG:4326")
         gdf_x = gdf_x.drop(columns=[loc_column])
         res_union = gpd.overlay(gdf_x, gdf, how='intersection')
-        if len(res_union)>0:
+        if len(res_union) > 0:
             match_token = res_union[loc_column].values[0]
             match_geo = res_union.geometry.values[0]
             return match_geo, match_token
@@ -231,12 +232,12 @@ def html_decode(row_, text_column):
     NOT remove normal HTML tags like <p>.
     """
     htmlCodes = (
-            ("'", '&#39;'),
-            ('"', '&quot;'),
-            ('>', '&gt;'),
-            ('<', '&lt;'),
-            ('&', '&amp;')
-        )
+        ("'", '&#39;'),
+        ('"', '&quot;'),
+        ('>', '&gt;'),
+        ('<', '&lt;'),
+        ('&', '&amp;')
+    )
     text = row_[text_column]
     for code in htmlCodes:
         text = text.replace(code[1], code[0])
@@ -284,8 +285,7 @@ def translate_string(row_, translate_client, text_field, model):
         return text
 
 
-def translate_dataframe(df_tweets, text_column, text_column_en, config, original_language = None):
-
+def translate_dataframe(df_tweets, text_column, text_column_en, config, original_language=None):
     model = 'Google'  # default model
     if 'translation-model' in config.keys():
         model = config['translation-model']
@@ -322,21 +322,21 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
 
         translate_client = [constructed_url, params, headers]
 
-    df_tweets = df_tweets.dropna(subset=[text_column])
-    df_texts = df_tweets.drop_duplicates(subset=[text_column])
+    for idx, column in enumerate(text_column):
+        df_tweets = df_tweets.dropna(subset=[column])
+        df_texts = df_tweets.drop_duplicates(subset=[column])
 
-    # translate to english
-    df_texts[text_column] = df_texts.progress_apply(lambda x:
-                                                    translate_string(x, translate_client, text_column, model),
-                                                    axis=1)
+        # translate to english
+        df_texts[column] = df_texts.progress_apply(lambda x:
+                                                   translate_string(x, translate_client, column, model), axis=1)
 
-    for ix, row in df_tweets.iterrows():
-        try:
-            df_texts_ = df_texts[df_texts['id'] == row['id']]
-            if len(df_texts_) > 0:
-                df_tweets.at[ix, text_column_en] = df_texts_[text_column].values[0]
-        except:
-            df_tweets.at[ix, text_column_en] = np.nan
+        for ix, row in df_tweets.iterrows():
+            try:
+                df_texts_ = df_texts[df_texts['id'] == row['id']]
+                if len(df_texts_) > 0:
+                    df_tweets.at[ix, text_column_en[idx]] = df_texts_[column].values[0]
+            except:
+                df_tweets.at[ix, text_column_en[idx]] = np.nan
 
     return df_tweets
 
@@ -350,15 +350,15 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
 
         df_tweets[filter_name] = df_tweets[text_column].apply(
             lambda x:
-            True if any(len(word.split()) == 1  and
+            True if any(len(word.split()) == 1 and
                         re.search(r"\b" + re.escape(word.lower()) + r"\b", x.lower())
                         for word in keywords)
-                else(
-                    True if any(len(word.split()) >= 2 and
-                                word.lower() in x.lower()
-                                for word in keywords)
-                    else False
-                )
+            else (
+                True if any(len(word.split()) >= 2 and
+                            word.lower() in x.lower()
+                            for word in keywords)
+                else False
+            )
         )
 
         # df_tweets['PII'] = df_tweets['text'].apply(lambda x: re.match(r'.\d\d\d\d\d+', x))
@@ -375,7 +375,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     df_tweets[text_column] = df_tweets[text_column].astype(str)
     text = ''
 
-    for msg_text in df_tweets['text']:
+    for msg_text in df_tweets[text_column]:
         text = text + msg_text
 
     # Remove Punctuation
@@ -423,8 +423,8 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     df_word_freq = df_word_freq[df_word_freq['Frequency'] >= threshold]
 
     # Add translations
-    df_word_freq = translate_dataframe(df_word_freq, 'Word', 'Translation_Russian', config, original_language='ru')
-    df_word_freq = translate_dataframe(df_word_freq, 'Word', 'Translation_Ukrainian', config, original_language='uk')
+    df_word_freq = translate_dataframe(df_word_freq, ['Word'], 'Translation_Russian', config, original_language='ru')
+    df_word_freq = translate_dataframe(df_word_freq, ['Word'], 'Translation_Ukrainian', config, original_language='uk')
 
     df_word_freq.drop(columns=['id'], inplace=True)
 
@@ -472,8 +472,7 @@ def detect_sentiment(row, nlp_client, text_column, model="HuggingFace"):
 
 
 def predict_sentiment(df_tweets, text_column, config):
-
-    model = 'HuggingFace' # default model
+    model = 'HuggingFace'  # default model
     if 'sentiment-model' in config.keys():
         model = config['sentiment-model']
 
@@ -566,7 +565,6 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
         with open(model_filepath, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
-
     # create list of topic descriptions (lists of keywords) and scores
     matched_topic_score_list = [model.choose_best_label(i) for i in processed_docs]
     matched_topic_list = [t[0] for t in matched_topic_score_list]
@@ -575,7 +573,8 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
 
     # create list of human-readable topic descriptions (de-lemmatize)
     logging.info('create list of human-readable topics (de-lemmatize)')
-    topic_list = [list(reversed(sorted(x.items(), key=operator.itemgetter(1))[-5:])) for x in model.cluster_word_distribution]
+    topic_list = [list(reversed(sorted(x.items(), key=operator.itemgetter(1))[-5:])) for x in
+                  model.cluster_word_distribution]
     topic_list_flat = [[l[0] for l in x] for x in topic_list]
     topic_list_human_readable = topic_list_flat.copy()
     for ixt, topic in enumerate(topic_list_human_readable):
@@ -637,8 +636,8 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
         # assign topic to tweets
         logging.info('assign topic to tweets')
         for ix, row in text.iterrows():
-            topic = df[df['topic number']==row['topic_num']]["topic"].values[0]
-            df_tweets.at[df_tweets[text_column]==row["text"], 'topic'] = topic
+            topic = df[df['topic number'] == row['topic_num']]["topic"].values[0]
+            df_tweets.at[df_tweets[text_column] == row["text"], 'topic'] = topic
 
     return df_tweets
 
@@ -663,16 +662,16 @@ def save_data(name, directory, data, id, config):
 
     # append to existing twitter dataframe
     final_table_columns = ["index", "source", "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
-    data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)    
+    data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)
     if containsNumber(name):
-       name = "_".join(name.split('_')[0:3])
+        name = "_".join(name.split('_')[0:3])
     data_all_path = f"./{directory}/{name}_all.csv"
     try:
         if not config["skip-datalake"]:
             blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
             with open(data_all_path, "wb") as download_file:
                 download_file.write(blob_client.download_blob().readall())
-        data_old = pd.read_csv(data_all_path)#, lines=True)
+        data_old = pd.read_csv(data_all_path)  # , lines=True)
         data_all = data_old.append(data, ignore_index=True)
     except:
         data_all = data.copy()
@@ -693,6 +692,3 @@ def containsNumber(string):
         if character.isdigit():
             return True
     return False
-
-
-
