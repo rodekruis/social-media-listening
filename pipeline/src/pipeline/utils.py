@@ -445,6 +445,27 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     return
 
 
+def arrange_telegram_messages(df_messages, message, reply, channel):
+    '''
+    Arrange posts and their replies from Telegram channel
+    '''
+    ix = len(df_messages)
+    df_messages.at[ix, "source"] = channel
+    df_messages.at[ix, "id_post"] = message.id
+    df_messages.at[ix, "text_post"] = message.text
+    if reply:
+        df_messages.at[ix, "text_reply"] = reply.text
+        df_messages.at[ix, "datetime"] = reply.date
+        df_messages.at[ix, "post"] = reply.post
+        # print(df_messages)
+    else:
+        df_messages.at[ix, "text_reply"] = reply
+        df_messages.at[ix, "datetime"] = message.date
+        df_messages.at[ix, "post"] = message.post
+        # print(df_messages)
+    return df_messages
+
+
 def detect_sentiment(row, nlp_client, text_column, model="HuggingFace"):
     text = row[text_column]
     if pd.isna(text):
@@ -609,6 +630,8 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
 
     df = df.sort_values(by=['frequency (%)'], ascending=False)
     df = df[['topic number', 'example', 'keywords', 'frequency (%)', 'number of responses']]
+    if filter_name != 'all':
+        df['topic'] = filter_name + '_' + df['topic number'].astype(int).astype(str)
 
     if not refit:
         # add topic descriptions and save topics locally
@@ -632,7 +655,7 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
         decimal=','
     )
 
-    if not refit:
+    if (not refit) or (filter_name != 'all'):
         # assign topic to tweets
         logging.info('assign topic to tweets')
         for ix, row in text.iterrows():
@@ -661,7 +684,8 @@ def save_data(name, directory, data, id, config):
             blob_client.upload_blob(upload_file, overwrite=True)
 
     # append to existing twitter dataframe
-    final_table_columns = ["index", "source", "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
+    final_table_columns = ["index", "source", "member_count", "message_count", \
+        "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
     data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)
     if containsNumber(name):
         name = "_".join(name.split('_')[0:3])

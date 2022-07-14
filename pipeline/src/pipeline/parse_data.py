@@ -261,10 +261,10 @@ def parse_youtube(config):
 
 
 def parse_telegram(config):
-    end_date = datetime.datetime.today().date()
-    start_date = end_date - pd.Timedelta(days=14)
-    # end_date = "2022-07-06"
-    # start_date = "2022-06-22"
+    # end_date = datetime.datetime.today().date()
+    # start_date = end_date - pd.Timedelta(days=14)
+    end_date = "2022-07-13"
+    start_date = "2022-06-29"
 
     # load telegram data
     telegram_data_path = "./telegram"
@@ -319,7 +319,7 @@ def parse_telegram(config):
             else:
                 df_to_translate = pd.concat(
                     [df_to_translate, df_messages[df_messages[topic]]]).drop_duplicates().reset_index(drop=True)
-
+        print(df_messages[['id_post', 'text_post', 'text_reply']])
         df_messages = translate_dataframe(
             df_to_translate,
             ['text_post', 'text_reply'],
@@ -327,27 +327,23 @@ def parse_telegram(config):
             config
         )
 
+        print(df_messages[['id_post', 'text_post_en', 'text_reply_en']])
         df_messages['text_post_en'] = df_messages['text_post_en'].fillna(method='ffill')
+        # print(df_messages)
 
-        # save_data(f"{config['country-code']}_{sm_code}_messagestranslated_{start_date}_{end_date}",
-        #           "telegram",
-        #           df_messages,
-        #           "id",
-        #           config)
+    # # sentiment analysis
+    # if config["analyse-sentiment"]:
+    #     df_messages = predict_sentiment(df_messages, next_text_value, config)
 
-    # sentiment analysis
-    if config["analyse-sentiment"]:
-        df_messages = predict_sentiment(df_messages, next_text_value, config)
-
-        # geolocate messages
-    if config["geolocate"]:
-        df_messages = geolocate_dataframe(df_messages,
-                                          config['geodata-locations'],
-                                          config['geodata-country-boundaries'],
-                                          config['location-input'],
-                                          config['location-output'],
-                                          [next_text_value],
-                                          config)
+    # # geolocate messages
+    # if config["geolocate"]:
+    #     df_messages = geolocate_dataframe(df_messages,
+    #                                       config['geodata-locations'],
+    #                                       config['geodata-country-boundaries'],
+    #                                       config['location-input'],
+    #                                       config['location-output'],
+    #                                       [next_text_value],
+    #                                       config)
 
     # topic analysis
     if config["analyse-topic"]:
@@ -364,22 +360,32 @@ def parse_telegram(config):
             (df_messages["cva"])
             ]
         df_messages_1 = predict_topic(df_messages_1, 'text_combined_en', sm_code, start_date, end_date, config, "cva")
+        # print(df_messages_1[['id_post', 'text_post_en', 'text_reply_en']])
         # analyse topic RED CROSS and not CVA
         df_messages_2 = df_messages[(df_messages["rcrc"]) & (~df_messages["cva"])]
         df_messages_2 = predict_topic(df_messages_2, 'text_combined_en', sm_code, start_date, end_date, config, "rcrc")
         # merge all into one single df
-        df_messages = df_messages_1.append(df_messages_2, ignore_index=True)
+        df_messages_topics = df_messages_1.append(df_messages_2, ignore_index=True)
 
         # Drop combined translated text column
+        df_messages_topics = df_messages_topics.drop(columns=['text_combined_en'])
         df_messages = df_messages.drop(columns=['text_combined_en'])
+        
+        # assign topics to messages that were not clustered
+        df_messages.drop(df_messages[df_messages['rcrc']].index, inplace=True)
+        print(df_messages)
+        df_messages['topic'] = ""
+        df_messages = df_messages.append(df_messages_topics, ignore_index=True)
+        # print(df_messages)
+        # df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic']=="")].index, inplace=True)
 
-        save_data(f"{config['country-code']}_{sm_code}_messagestopics_{start_date}_{end_date}",
+        save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
                   "telegram",
                   df_messages,
                   "id",
                   config)
 
-    return f"./telegram/{config['country-code']}_{sm_code}_messagestopics_all.csv"
+    return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"
 
 
 def merge_sources(data_to_merge, config):

@@ -8,7 +8,7 @@ import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest
-from pipeline.utils import get_blob_service_client, get_secret_keyvault, save_data
+from pipeline.utils import get_blob_service_client, get_secret_keyvault, arrange_telegram_messages, save_data
 import logging
 import datetime
 
@@ -214,8 +214,10 @@ def get_kobo(config):
 def get_facebook(config):
 
     # get data from facebook
-    facebook_secrets = get_secret_keyvault('facebook-secret', config)
-    facebook_secrets = json.loads(facebook_secrets)
+    # facebook_secrets = get_secret_keyvault('facebook-secret', config)
+    # facebook_secrets = json.loads(facebook_secrets)
+    facebook_secrets = {"token": "EAAHZCG5YvZCdkBAGcRZAYPodE27mtEp8ubp6ZAVLLCm83A9FpUKveFT1afJh2nBZC4ZAp3qRVNjEQhpZC08ITFAcqFX9LWtlGTPY56ZAQp1LMjhZBuRuc7YQSTQEjwKwmAlAR9Tff9p5QvvfnPiu3xZCaCRqHSrjBfJpKgfQtnUmwYexYZACJZBFsmd5UtZB0ZBlxTlNwIypSienkNZBeC0xIZBSDES9", \
+    "page": "612726123570520"}# "387184371438297"}
     graph = facebook.GraphAPI(
         access_token=facebook_secrets["token"])#,
         #version="3.1")
@@ -238,7 +240,7 @@ def get_facebook(config):
             stats = graph.get_object(id=post["id"], fields="message,shares,reactions.summary(true)")
             # print(stats)
             if 'message' in stats.keys():
-                stats_to_save['text'] = stats['message']
+                stats_to_save['text_post'] = stats['message']
             # if 'shares' in stats.keys():
             #     stats_to_save['shares'] = stats['shares']['count']
             # if 'reactions' in stats.keys():
@@ -266,7 +268,8 @@ def get_facebook(config):
                     stats_to_save['source'] = facebook_secrets["page"]
                     # stats_to_save['id_comment'] = stats['id']
                     stats_to_save['datetime'] = comment['created_time']
-                    stats_to_save['text'] = stats['text']
+                    stats_to_save['text_post'] = stats['text']
+                    stats_to_save['text_reply'] = None
                     stats_to_save['post'] = False
                     # stats_to_save['reaction_count'] = stats['reactions']['summary']['total_count']
                     # if stats['reactions']['summary']['viewer_reaction'] in reaction_types:
@@ -346,40 +349,29 @@ def get_telegram(config):
         try:
             channel_entity = telegram_client.get_entity(channel)
             channel_full_info = telegram_client(GetFullChannelRequest(channel=channel_entity))
-            
-            idx = len(df_member_counts)
-            df_member_counts.at[idx, 'source'] = channel
-            member_count = channel_full_info.full_chat.participants_count
-            df_member_counts.at[idx, 'member_count'] = member_count
-            df_member_counts.at[idx, 'date'] = end_date
 
-            df_replies = pd.DataFrame()
             for message in telegram_client.iter_messages(
                 channel_entity,
                 offset_date=start_date,
                 reverse=True
             ):
-                ix = len(df_messages)
-                message_id = message.id
-                df_messages.at[ix, "source"] = channel
-                df_messages.at[ix, "id_post"] = message_id
-                df_messages.at[ix, "text"] = message.text
-                df_messages.at[ix, "datetime"] = message.date
-                df_messages.at[ix, "post"] = message.post
+                reply = None
+                df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
                 if message.replies:
+                    df_replies = pd.DataFrame()
                     for reply in telegram_client.iter_messages(
                         channel_entity,
-                        reply_to=message_id
+                        reply_to=message.id
                     ):
-                        ix_reply = len(df_replies)
-                        df_replies.at[ix_reply, "source"] = channel
-                        df_replies.at[ix_reply, "id_post"] = message_id
-                        df_replies.at[ix_reply, "text"] = reply.text
-                        df_replies.at[ix_reply, "datetime"] = reply.date
-                        df_replies.at[ix_reply, "post"] = reply.post
+                        df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
                     df_messages = df_messages.append(df_replies, ignore_index=True)
 
-            df_member_counts.at[idx, 'message_count'] = len(df_messages)
+            idx = len(df_member_counts)
+            df_member_counts.at[idx, 'source'] = channel
+            member_count = channel_full_info.full_chat.participants_count
+            df_member_counts.at[idx, 'member_count'] = member_count
+            df_member_counts.at[idx, 'date'] = end_date
+            df_member_counts.at[idx, 'message_count'] = len(df_messages[df_messages['source']==channel])
         except Exception as e:
             logging.error(f"in getting in telegram channel {channel}: {e}")
 
