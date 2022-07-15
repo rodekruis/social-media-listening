@@ -3,6 +3,7 @@ import facebook
 import pandas as pd
 import requests
 import os
+import time
 from google.oauth2 import service_account
 import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
@@ -243,6 +244,7 @@ def get_facebook(config):
 
                 df_comments = pd.DataFrame()
                 comments = {'data': []}
+                # TODO: add time sleep as in drought get ENSO
                 try:
                     comments = graph.get_object(id=post["id"], fields="comments")['comments']
                 except KeyError:
@@ -320,6 +322,7 @@ def get_telegram(config):
             channel_entity = telegram_client.get_entity(channel)
             channel_full_info = telegram_client(GetFullChannelRequest(channel=channel_entity))
 
+            time.sleep(60)
             for message in telegram_client.iter_messages(
                 channel_entity,
                 offset_date=start_date,
@@ -329,6 +332,7 @@ def get_telegram(config):
                 df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
                 if message.replies:
                     df_replies = pd.DataFrame()
+                    time.sleep(60)
                     for reply in telegram_client.iter_messages(
                         channel_entity,
                         reply_to=message.id

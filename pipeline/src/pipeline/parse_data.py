@@ -263,8 +263,8 @@ def parse_youtube(config):
 def parse_telegram(config):
     end_date = datetime.datetime.today().date()
     start_date = end_date - pd.Timedelta(days=14)
-    # end_date = "2022-07-13"
-    # start_date = "2022-06-29"
+    # end_date = "2022-07-15"
+    # start_date = "2022-07-01"
 
     # load telegram data
     telegram_data_path = "./telegram"
@@ -319,7 +319,6 @@ def parse_telegram(config):
             else:
                 df_to_translate = pd.concat(
                     [df_to_translate, df_messages[df_messages[topic]]]).drop_duplicates().reset_index(drop=True)
-        print(df_messages[['id_post', 'text_post', 'text_reply']])
         df_messages = translate_dataframe(
             df_to_translate,
             ['text_post', 'text_reply'],
@@ -327,9 +326,7 @@ def parse_telegram(config):
             config
         )
 
-        print(df_messages[['id_post', 'text_post_en', 'text_reply_en']])
         df_messages['text_post_en'] = df_messages['text_post_en'].fillna(method='ffill')
-        # print(df_messages)
 
     # # sentiment analysis
     # if config["analyse-sentiment"]:
@@ -360,7 +357,6 @@ def parse_telegram(config):
             (df_messages["cva"])
             ]
         df_messages_1 = predict_topic(df_messages_1, 'text_combined_en', sm_code, start_date, end_date, config, "cva")
-        # print(df_messages_1[['id_post', 'text_post_en', 'text_reply_en']])
         # analyse topic RED CROSS and not CVA
         df_messages_2 = df_messages[(df_messages["rcrc"]) & (~df_messages["cva"])]
         df_messages_2 = predict_topic(df_messages_2, 'text_combined_en', sm_code, start_date, end_date, config, "rcrc")
@@ -373,10 +369,8 @@ def parse_telegram(config):
         
         # assign topics to messages that were not clustered
         df_messages.drop(df_messages[df_messages['rcrc']].index, inplace=True)
-        print(df_messages)
         df_messages['topic'] = ""
         df_messages = df_messages.append(df_messages_topics, ignore_index=True)
-        # print(df_messages)
         # df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic']=="")].index, inplace=True)
 
     save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
