@@ -8,7 +8,7 @@ import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest
-from pipeline.utils import get_blob_service_client, get_secret_keyvault, arrange_telegram_messages, save_data
+from pipeline.utils import get_blob_service_client, get_secret_keyvault, arrange_facebook_replies, arrange_telegram_messages, save_data
 import logging
 import datetime
 
@@ -213,114 +213,84 @@ def get_kobo(config):
 
 def get_facebook(config):
 
+    end_date = datetime.datetime.today().date()
+
     # get data from facebook
-    # facebook_secrets = get_secret_keyvault('facebook-secret', config)
-    # facebook_secrets = json.loads(facebook_secrets)
-    facebook_secrets = {"token": "EAAHZCG5YvZCdkBAGcRZAYPodE27mtEp8ubp6ZAVLLCm83A9FpUKveFT1afJh2nBZC4ZAp3qRVNjEQhpZC08ITFAcqFX9LWtlGTPY56ZAQp1LMjhZBuRuc7YQSTQEjwKwmAlAR9Tff9p5QvvfnPiu3xZCaCRqHSrjBfJpKgfQtnUmwYexYZACJZBFsmd5UtZB0ZBlxTlNwIypSienkNZBeC0xIZBSDES9", \
-    "page": "612726123570520"}# "387184371438297"}
+    facebook_secrets = get_secret_keyvault('facebook-secret', config)
+    facebook_secrets = json.loads(facebook_secrets)
+    
     graph = facebook.GraphAPI(
         access_token=facebook_secrets["token"])#,
         #version="3.1")
+    pages = [{"id": 612726123570520, "name": "fb/Hello"}, \
+        {"id": 415050737211518, "name": "fb/Test API"}]
     reaction_types = ['LIKE', 'LOVE', 'WOW', 'HAHA', 'SORRY', 'ANGRY', \
         'THANKFUL', 'PRIDE', 'CARE', 'FIRE', 'HUNDRED']
 
     # get all comments to posts
-    df_posts = pd.DataFrame()
-    df_comments = pd.DataFrame()
+    df_pages = pd.DataFrame()
 
-    page_posts = graph.get_object(id=facebook_secrets["page"], fields="feed")['feed']
-    # print(page_posts)
-    while True:
-        for post in page_posts['data']:
-            # print(post)
-            stats_to_save = {'id_post': post["id"]}
-            stats_to_save['source'] = facebook_secrets["page"]
-            # stats_to_save['id_comment'] = 0
-            stats_to_save['datetime'] =  post['updated_time']
-            stats = graph.get_object(id=post["id"], fields="message,shares,reactions.summary(true)")
-            # print(stats)
-            if 'message' in stats.keys():
-                stats_to_save['text_post'] = stats['message']
-            # if 'shares' in stats.keys():
-            #     stats_to_save['shares'] = stats['shares']['count']
-            # if 'reactions' in stats.keys():
-            #     stats_to_save['reaction_count'] = stats['reactions']['summary']['total_count']
-            #     if stats['reactions']['summary']['viewer_reaction'] in reaction_types:
-            #         for reaction in [stats['reactions']['summary']['viewer_reaction']]:
-            #             stats_to_save[reaction.lower()] = stats['reactions']['summary']['total_count']
-            # better, use reactions.type(TYPE).summary(total_count) for TYPE=LIKE, LOVE, WOW, HAHA, SORRY, ANGRY
-            # print(stats_to_save)
-            stats_to_save['post'] = True
-            df_posts = df_posts.append(pd.Series(stats_to_save), ignore_index=True)
+    for page in pages:
+        df_posts = pd.DataFrame()
+        page_posts = graph.get_object(id=page['id'], fields="feed")['feed']
+        while True:
+            for post in page_posts['data']:
+                comment = {}
+                # # use the line below to get reactions info
+                # stats = graph.get_object(id=post["id"], fields="message,shares,reactions.summary(true)")
+                stats_to_save = arrange_facebook_replies(post, comment, page['name'])
+                df_posts = df_posts.append(pd.Series(stats_to_save), ignore_index=True)
 
-            comments = {'data': []}
-            try:
-                comments = graph.get_object(id=post["id"], fields="comments")['comments']
-            except KeyError:
-                continue
+                df_comments = pd.DataFrame()
+                comments = {'data': []}
+                try:
+                    comments = graph.get_object(id=post["id"], fields="comments")['comments']
+                except KeyError:
+                    continue
 
-            while True:
-                for comment in comments['data']:
-                    # print(comment)
-                    stats = graph.get_object(id=comment["id"], fields="message,from,reactions.summary(true)")#like_count")
-                    # print(stats)
-                    stats_to_save = {'id_post': post["id"]}
-                    stats_to_save['source'] = facebook_secrets["page"]
-                    # stats_to_save['id_comment'] = stats['id']
-                    stats_to_save['datetime'] = comment['created_time']
-                    stats_to_save['text_post'] = stats['text']
-                    stats_to_save['text_reply'] = None
-                    stats_to_save['post'] = False
-                    # stats_to_save['reaction_count'] = stats['reactions']['summary']['total_count']
-                    # if stats['reactions']['summary']['viewer_reaction'] in reaction_types:
-                    #     for reaction in [stats['reactions']['summary']['viewer_reaction']]:
-                    #         stats_to_save[reaction.lower()] = stats['reactions']['summary']['total_count']
-                    # print(stats_to_save)
-                    df_comments = df_comments.append(pd.Series(stats_to_save), ignore_index=True)
+                while True:
+                    for comment in comments['data']:
+                        stats_to_save = arrange_facebook_replies(post, comment, page['name'])
+                        df_comments = df_comments.append(pd.Series(stats_to_save), ignore_index=True)
 
-                    while True:
-                        for comment in comments['data']:
-                            # print(comment)
-                            stats = graph.get_object(id=comment["id"], fields="message,from,reactions.summary(true)")#like_count")
-                            # print(stats)
-                            stats_to_save = {'id_post': post["id"]}
-                            stats_to_save['source'] = facebook_secrets["page"]
-                            # stats_to_save['id_comment'] = stats['id']
-                            stats_to_save['datetime'] = comment['created_time']
-                            stats_to_save['text'] = stats['text']
-                            stats_to_save['post'] = False
-                            # stats_to_save['reaction_count'] = stats['reactions']['summary']['total_count']
-                            # if stats['reactions']['summary']['viewer_reaction'] in reaction_types:
-                            #     for reaction in [stats['reactions']['summary']['viewer_reaction']]:
-                            #         stats_to_save[reaction.lower()] = stats['reactions']['summary']['total_count']
-                            # print(stats_to_save)
-                            df_comments = df_comments.append(pd.Series(stats_to_save), ignore_index=True)
-                            
+                        comments = {'data': []}
+                        try:
+                            comments = graph.get_object(id=comment["id"], fields="comments")['comments']
+                        except KeyError:
+                            continue
+
+                        while True:
+                            for comment in comments['data']:
+                                stats_to_save = arrange_facebook_replies(post, comment, page['name'])
+                                df_comments = df_comments.append(pd.Series(stats_to_save), ignore_index=True)
+                                
                             try:
                                 comments = requests.get(comments["paging"]["next"]).json()
-                                # print(comments)
                             except KeyError:
                                 break
 
-                try:
-                    comments = requests.get(comments["paging"]["next"]).json()
-                    # print(comments)
-                except KeyError:
-                    break
-            
-            df_posts = df_posts.append(df_comments)
-            
+                    try:
+                        comments = requests.get(comments["paging"]["next"]).json()
+                    except KeyError:
+                        break
+                
+                df_posts = df_posts.append(df_comments, ignore_index=True)
+                
+            try:
+                page_posts = requests.get(page_posts["paging"]["next"]).json()
+            except KeyError:
+                break
 
-        try:
-            page_posts = requests.get(page_posts["paging"]["next"]).json()
-        except KeyError:
-            break
+        df_pages = df_pages.append(df_posts, ignore_index=True)
     
-    df_posts.reset_index(inplace=True)
-    df_posts['id'] = df_posts.index
+    df_pages.reset_index(inplace=True)
+    df_pages['id'] = df_pages.index
 
-    save_data("facebook_posts", "facebook", df_posts, "id", config)
-    # save_data("facebook_comments", "facebook", df_comments, "id_comment", config)
+    save_data(f"{config['country-code']}_FB_posts_{end_date}",
+        "facebook", 
+        df_pages, 
+        "id", 
+        config)
 
 
 def get_telegram(config):

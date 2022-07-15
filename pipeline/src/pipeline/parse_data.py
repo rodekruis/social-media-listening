@@ -261,10 +261,10 @@ def parse_youtube(config):
 
 
 def parse_telegram(config):
-    # end_date = datetime.datetime.today().date()
-    # start_date = end_date - pd.Timedelta(days=14)
-    end_date = "2022-07-13"
-    start_date = "2022-06-29"
+    end_date = datetime.datetime.today().date()
+    start_date = end_date - pd.Timedelta(days=14)
+    # end_date = "2022-07-13"
+    # start_date = "2022-06-29"
 
     # load telegram data
     telegram_data_path = "./telegram"
@@ -379,7 +379,7 @@ def parse_telegram(config):
         # print(df_messages)
         # df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic']=="")].index, inplace=True)
 
-        save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
+    save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
                   "telegram",
                   df_messages,
                   "id",

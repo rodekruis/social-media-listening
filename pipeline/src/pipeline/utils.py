@@ -457,13 +457,48 @@ def arrange_telegram_messages(df_messages, message, reply, channel):
         df_messages.at[ix, "text_reply"] = reply.text
         df_messages.at[ix, "datetime"] = reply.date
         df_messages.at[ix, "post"] = reply.post
-        # print(df_messages)
     else:
         df_messages.at[ix, "text_reply"] = reply
         df_messages.at[ix, "datetime"] = message.date
         df_messages.at[ix, "post"] = message.post
-        # print(df_messages)
     return df_messages
+
+
+def arrange_facebook_replies(post, comment, source):
+    '''
+    Arrange a post, their replies (and reactions, shares) 
+    of a facebook post
+    '''
+    stats_to_save = {'id_post': post["id"]}
+    stats_to_save['source'] = source
+    # stats_to_save['id_comment'] = comment['id']
+    if comment.keys():
+        stats_to_save['datetime'] = comment['created_time']
+        stats_to_save['text_post'] = post['message']
+        stats_to_save['post'] = "False"
+        if 'message' in comment.keys():
+            stats_to_save['text_reply'] = comment['message']
+        else:
+            stats_to_save['text_reply'] = ""
+    elif post.keys():
+        stats_to_save['datetime'] = post['updated_time']
+        stats_to_save['text_reply'] = ""
+        stats_to_save['post'] = "True"
+        if 'message' in post.keys():
+            stats_to_save['text_post'] = post['message']
+        else:
+            stats_to_save['text_post'] = ""
+
+    # # these commented lines used when shares and reactions needed
+    # if 'shares' in stats.keys():
+    #     stats_to_save['shares'] = stats['shares']['count']
+    # if 'reactions' in stats.keys():
+    #     stats_to_save['reaction_count'] = stats_comment['reactions']['summary']['total_count']
+    #     if stats_comment['reactions']['summary']['viewer_reaction'] in reaction_types:
+    #         for reaction in [stats_comment['reactions']['summary']['viewer_reaction']]:
+    #             stats_to_save[reaction.lower()] = stats_comment['reactions']['summary']['total_count']
+    # # better, use reactions.type(TYPE).summary(total_count) for TYPE=LIKE, LOVE, WOW, HAHA, SORRY, ANGRY
+    return stats_to_save
 
 
 def detect_sentiment(row, nlp_client, text_column, model="HuggingFace"):
