@@ -456,11 +456,11 @@ def arrange_telegram_messages(df_messages, message, reply, channel):
     if reply:
         df_messages.at[ix, "text_reply"] = reply.text
         df_messages.at[ix, "datetime"] = reply.date
-        df_messages.at[ix, "post"] = reply.post
+        df_messages.at[ix, "post"] = False
     else:
         df_messages.at[ix, "text_reply"] = reply
         df_messages.at[ix, "datetime"] = message.date
-        df_messages.at[ix, "post"] = message.post
+        df_messages.at[ix, "post"] = True
     return df_messages
 
 
