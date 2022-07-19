@@ -319,6 +319,7 @@ def parse_telegram(config):
             else:
                 df_to_translate = pd.concat(
                     [df_to_translate, df_messages[df_messages[topic]]]).drop_duplicates().reset_index(drop=True)
+
         df_messages = translate_dataframe(
             df_to_translate,
             ['text_post', 'text_reply'],
@@ -369,9 +370,10 @@ def parse_telegram(config):
         
         # assign topics to messages that were not clustered
         df_messages.drop(df_messages[df_messages['rcrc']].index, inplace=True)
+
         df_messages['topic'] = ""
         df_messages = df_messages.append(df_messages_topics, ignore_index=True)
-        # df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic']=="")].index, inplace=True)
+        df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic']=="")].index, inplace=True)
 
     save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
                   "telegram",
