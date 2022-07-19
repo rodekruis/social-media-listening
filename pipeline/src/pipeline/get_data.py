@@ -330,7 +330,7 @@ def get_telegram(config):
             ):
                 reply = None
                 df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
-                if message.replies:
+                if channel_entity.broadcast and message.post and message.replies:
                     df_replies = pd.DataFrame()
                     time.sleep(60)
                     for reply in telegram_client.iter_messages(

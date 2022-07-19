@@ -423,8 +423,8 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     df_word_freq = df_word_freq[df_word_freq['Frequency'] >= threshold]
 
     # Add translations
-    df_word_freq = translate_dataframe(df_word_freq, ['Word'], 'Translation_Russian', config, original_language='ru')
-    df_word_freq = translate_dataframe(df_word_freq, ['Word'], 'Translation_Ukrainian', config, original_language='uk')
+    df_word_freq = translate_dataframe(df_word_freq, ['Word'], ['Translation_Russian'], config, original_language='ru')
+    df_word_freq = translate_dataframe(df_word_freq, ['Word'], ['Translation_Ukrainian'], config, original_language='uk')
 
     df_word_freq.drop(columns=['id'], inplace=True)
 
