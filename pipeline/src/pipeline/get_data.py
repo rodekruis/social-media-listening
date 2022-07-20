@@ -318,24 +318,25 @@ def get_telegram(config):
     df_messages = pd.DataFrame()
     df_member_counts = pd.DataFrame()
     for channel in telegram_channels:
+        logging.info(f"getting in telegram channel {channel}")
         try:
             channel_entity = telegram_client.get_entity(channel)
             channel_full_info = telegram_client(GetFullChannelRequest(channel=channel_entity))
 
-            time.sleep(60)
             for message in telegram_client.iter_messages(
                 channel_entity,
                 offset_date=start_date,
-                reverse=True
+                reverse=True,
+                wait_time = 5
             ):
                 reply = None
                 df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
                 if channel_entity.broadcast and message.post and message.replies:
                     df_replies = pd.DataFrame()
-                    time.sleep(60)
                     for reply in telegram_client.iter_messages(
                         channel_entity,
-                        reply_to=message.id
+                        reply_to=message.id,
+                        wait_time = 5
                     ):
                         df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
                     df_messages = df_messages.append(df_replies, ignore_index=True)
@@ -346,6 +347,9 @@ def get_telegram(config):
             df_member_counts.at[idx, 'member_count'] = member_count
             df_member_counts.at[idx, 'date'] = end_date
             df_member_counts.at[idx, 'message_count'] = len(df_messages[df_messages['source']==channel])
+            
+            logging.info(f"finish telegram channel {channel}, sleep 10 seconds")
+            time.sleep(10)
         except Exception as e:
             logging.error(f"in getting in telegram channel {channel}: {e}")
 
