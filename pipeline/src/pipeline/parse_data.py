@@ -266,11 +266,24 @@ def parse_telegram(config):
     # end_date = "2022-07-15"
     # start_date = "2022-07-01"
 
+    dates = [start_date + datetime.timedelta(days=x) \
+        for x in range((end_date - start_date).days)]
+    dates.append(end_date)
+
+    # TODO: function to download all tel_messages in storage
+
     # load telegram data
     telegram_data_path = "./telegram"
-    messages_path = telegram_data_path + f"/{config['country-code']}_TL_messages_{start_date}_{end_date}_latest.csv"
-    df_messages = pd.read_csv(messages_path)
     sm_code = "TL"
+    df_messages = pd.DataFrame()
+    # i = 1
+    for i in range(len(dates)-1):
+        date_1 = dates[i].strftime('%Y-%m-%d')
+        date_2 = dates[i+1].strftime('%Y-%m-%d')
+        messages_path = telegram_data_path + f"/{config['country-code']}_{sm_code}_messages_{date_1}_{date_2}_latest.csv"
+        df = pd.read_csv(messages_path)
+        df_messages = df_messages.append(df, ignore_index=True)
+        # i += 1
 
     # Combine text of post and replies
     df_messages['text_post'] = df_messages['text_post'].fillna("")

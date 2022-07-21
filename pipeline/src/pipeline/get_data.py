@@ -336,9 +336,10 @@ def get_telegram(config):
                     for reply in telegram_client.iter_messages(
                         channel_entity,
                         reply_to=message.id,
-                        wait_time = 5
+                        wait_time = 2
                     ):
                         df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
+                        time.sleep(5)
                     df_messages = df_messages.append(df_replies, ignore_index=True)
 
             idx = len(df_member_counts)
