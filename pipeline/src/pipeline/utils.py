@@ -790,3 +790,16 @@ def get_daily_messages(start_date, end_date, telegram_data_path, config):
         # i += 1
 
     return df_messages
+
+
+def previous_weekday(d, weekday):
+    '''
+    Find the closest past weekday from a given day
+    i.e. what is the closest past Wednesday from today?
+    d: a date in datetime type
+    weekday: 0=Mon, 1=Tue, 2=Wed, ect.
+    '''
+    days_ahead = weekday - d.weekday()
+    if days_ahead >= 0: # Target day already happened this week
+        days_ahead = 7 - days_ahead
+    return d - datetime.timedelta(days_ahead)
