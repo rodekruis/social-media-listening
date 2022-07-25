@@ -313,7 +313,7 @@ def get_telegram(config):
 
     telegram_channels = config["telegram-channels"]
     end_date = datetime.datetime.today().date()
-    start_date = end_date - pd.Timedelta(days=14)
+    start_date = end_date - pd.Timedelta(days=1)
 
     df_messages = pd.DataFrame()
     df_member_counts = pd.DataFrame()
