@@ -342,7 +342,7 @@ def parse_telegram(config):
     # # sentiment analysis
     # if config["analyse-sentiment"]:
     #     df_messages = predict_sentiment(df_messages, next_text_value, config)
-
+    #
     # # geolocate messages
     # if config["geolocate"]:
     #     df_messages = geolocate_dataframe(df_messages,
