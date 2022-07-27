@@ -773,7 +773,7 @@ def save_to_db(sm_code, data, config):
     current_datetime = datetime.now()
 
     # Make connection to Azure datbase
-    connection, cursor = connect_to_db()
+    connection, cursor = connect_to_db(config)
 
     try:
         mySql_insert_query ="""INSERT INTO smm.messages (ID_SM, Country, SM, Channel, DateTimeScraped,\
@@ -807,7 +807,7 @@ def save_to_db(sm_code, data, config):
         connection.close()
         print("Pyodbc connection is closed")
 
-def connect_to_db():
+def connect_to_db(config):
     # Get credentials
     database_secret = get_secret_keyvault(config["azure-database-secret"], config)
     database_secret = json.loads(database_secret)
