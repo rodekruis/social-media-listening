@@ -2,10 +2,9 @@ import os
 import ast
 import pandas as pd
 import numpy as np
-from pipeline.src.pipeline.utils import previous_weekday
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, \
     filter_by_keywords, get_blob_service_client, html_decode, predict_topic, \
-    predict_sentiment, save_data, get_word_frequency, get_daily_messages
+    predict_sentiment, save_data, get_word_frequency, get_daily_messages, previous_weekday
 import logging
 import datetime
 import random
