@@ -125,7 +125,7 @@ def get_twitter(config):
     # drop duplicates
     df_tweets = df_tweets.drop_duplicates(subset=['id'])
 
-    save_data("tweets", "twitter", df_tweets, "id", config)
+    save_data("tweets", "twitter", df_tweets, "id", "TW", config)
 
 
 def get_youtube(config):
@@ -196,7 +196,7 @@ def get_youtube(config):
                 'lang': 'unknown'
             }), ignore_index=True)
 
-    save_data("videos", "youtube", df_videos, "id", config)
+    save_data("videos", "youtube", df_videos, "id", "YT", config)
 
 
 def get_kobo(config):
@@ -209,7 +209,7 @@ def get_kobo(config):
     data = data_request.json()['results']
     df_form = pd.DataFrame(data)
 
-    save_data("form_data", "kobo", df_form, "_id", config)
+    save_data("form_data", "kobo", df_form, "_id", "Kobo", config)
 
 
 def get_facebook(config):
@@ -291,7 +291,8 @@ def get_facebook(config):
     save_data(f"{config['country-code']}_FB_posts_{end_date}",
         "facebook", 
         df_pages, 
-        "id", 
+        "id",
+        "FB",
         config)
 
 
@@ -366,11 +367,13 @@ def get_telegram(config):
               "telegram",
               df_messages,
               "id",
+              "TL",
               config)
     save_data(f"{config['country-code']}_TL_membercount_{start_date}_{end_date}",
               "telegram",
               df_member_counts,
               "id",
+              "TL",
               config)
 
     telegram_client.disconnect()

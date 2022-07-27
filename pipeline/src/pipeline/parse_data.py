@@ -117,7 +117,7 @@ def parse_facebook(config):
     if config["analyse-topic"]:
         df_fb = predict_topic(df_fb, next_text_value, config)
 
-    save_data("facebook_comments_processed", "facebook", df_fb, "id_comment", config)
+    save_data("facebook_comments_processed", "facebook", df_fb, "id_comment", "FB", config)
     return "./facebook/facebook_comments_processed_all.csv"
 
 
@@ -160,7 +160,7 @@ def parse_kobo(config):
     if config["analyse-topic"]:
         df_kobo = predict_topic(df_kobo, next_text_value, config)
 
-    save_data("form_data_processed", "kobo", df_kobo, "_id", config)
+    save_data("form_data_processed", "kobo", df_kobo, "_id", "Kobo", config)
     return "./kobo/form_data_processed_all.csv"
 
 
@@ -225,7 +225,7 @@ def parse_twitter(config):
         if col in df_tweets.columns:
             df_tweets = df_tweets.drop(columns=[col])
 
-    save_data("tweets_processed", "twitter", df_tweets, "id", config)
+    save_data("tweets_processed", "twitter", df_tweets, "id", "TW", config)
     return "./twitter/tweets_processed_all.csv"
 
 
@@ -258,7 +258,7 @@ def parse_youtube(config):
                                         [next_text_value],
                                         config)
 
-    save_data("videos_processed", "youtube", df_videos, "id", config)
+    save_data("videos_processed", "youtube", df_videos, "id", "YT", config)
     return "./youtube/videos_processed_all.csv"
 
 
@@ -269,13 +269,12 @@ def parse_telegram(config):
     else:
         end_date = today
     start_date = end_date - pd.Timedelta(days=14)
-    # end_date = "2022-07-20"
-    # start_date = "2022-07-06"
 
     # load telegram data
     telegram_data_path = "./telegram"
     sm_code = "TL"
 
+    #TODO: Implement Reading From Azure Database
     multiple_dates = False # True/ False  select True if using daily data instead of bi-weekly data
     if multiple_dates:
         df_messages = get_daily_messages(start_date, end_date, telegram_data_path, config)
@@ -390,6 +389,7 @@ def parse_telegram(config):
                   "telegram",
                   df_messages,
                   "id",
+                  sm_code,
                   config)
 
     return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"

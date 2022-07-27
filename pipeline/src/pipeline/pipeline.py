@@ -49,10 +49,7 @@ def main(config, keep):
             config = yaml.load(file, Loader=yaml.FullLoader)
 
     # load credentials
-    if all(
-        x in os.environ
-        for x in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"]
-    ):
+    if all(x in os.environ for x in ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"]):
         pass
     else:
         load_dotenv(f"../credentials/.env")

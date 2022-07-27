@@ -16,6 +16,7 @@ import geopandas as gpd
 import json
 import enchant
 import transformers
+import pyodbc
 from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import *
 np.random.seed(2018)
@@ -48,7 +49,7 @@ nltk.download('punkt')
 import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
-import datetime
+from datetime import datetime
 
 
 def get_secret_keyvault(secret_name, config):
@@ -709,9 +710,9 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
     return df_tweets
 
 
-def save_data(name, directory, data, id, config):
+def save_data(name, directory, data, id, sm_code, config):
     """
-    both locally and on the cloud:
+    both locally and in the datalake:
     1. save data as {directory}/{name}_latest.csv and append to {directory}/{name}_all.csv
     2. drop duplicates in {directory}/{name}_all.csv based on {id}
     3. save {directory}/{name}_all.csv
@@ -726,6 +727,10 @@ def save_data(name, directory, data, id, config):
         blob_client = get_blob_service_client(f'{directory}/{name}_latest.csv', config)
         with open(tweets_path, "rb") as upload_file:
             blob_client.upload_blob(upload_file, overwrite=True)
+
+    # upload to database
+    if not config["skip-database"]:
+        save_to_db(sm_code, data, config)
 
     # append to existing twitter dataframe
     final_table_columns = ["index", "source", "member_count", "message_count", \
@@ -754,6 +759,75 @@ def save_data(name, directory, data, id, config):
         with open(data_all_path, "rb") as upload_file:
             blob_client.upload_blob(upload_file, overwrite=True)
 
+def save_to_db(sm_code, data, config):
+
+    # Prepare for storing in Azure db
+    data['post'] = np.where(
+        data['post'],
+        1,
+        0
+    )
+
+    data = data.astype(object).where(pd.notnull(data), None)
+
+    current_datetime = datetime.now()
+
+    # Make connection to Azure datbase
+    connection, cursor = connect_to_db()
+
+    try:
+        mySql_insert_query ="""INSERT INTO smm.messages (ID_SM, Country, SM, Channel, DateTimeScraped,\
+         DateTimeSent, DateSent, Post, TextPost, TextReply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+
+        for idx, row in data.iterrows():
+
+            cursor.execute(
+                mySql_insert_query,
+                row['id'],
+                config['country-code'],
+                sm_code,
+                row['source'],
+                current_datetime,
+                row['datetime'],
+                row['date'],
+                row['post'],
+                row['text_post'],
+                row['text_reply']
+            )
+
+            connection.commit()
+
+        print(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
+
+    except pyodbc.Error as error:
+        print("Failed to insert into SQL table {}".format(error))
+
+    finally:
+        cursor.close()
+        connection.close()
+        print("Pyodbc connection is closed")
+
+def connect_to_db():
+    # Get credentials
+    database_secret = get_secret_keyvault(config["azure-database-secret"], config)
+    database_secret = json.loads(database_secret)
+
+    try:
+        # Connect to db
+        driver = '{ODBC Driver 17 for SQL Server}'
+        connection = pyodbc.connect(
+            f'DRIVER={driver};'
+            f'SERVER=tcp:{database_secret["SQL_DB_SERVER"]};'
+            f'PORT=1433;DATABASE={database_secret["SQL_DB"]};'
+            f'UID={database_secret["SQL_USER"]};'
+            f'PWD={database_secret["SQL_PASSWORD"]}'
+        )
+
+        cursor = connection.cursor()
+    except pyodbc.Error as error:
+        print("Failed to connect to database {}".format(error))
+
+    return connection, cursor
 
 def containsNumber(string):
     for character in string:
