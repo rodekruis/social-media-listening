@@ -2,8 +2,10 @@ import os
 import ast
 import pandas as pd
 import numpy as np
-from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, filter_by_keywords, \
-    get_blob_service_client, html_decode, predict_topic, predict_sentiment, save_data, get_word_frequency
+from pipeline.src.pipeline.utils import previous_weekday
+from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, \
+    filter_by_keywords, get_blob_service_client, html_decode, predict_topic, \
+    predict_sentiment, save_data, get_word_frequency, get_daily_messages
 import logging
 import datetime
 import random
@@ -261,29 +263,25 @@ def parse_youtube(config):
 
 
 def parse_telegram(config):
-    end_date = datetime.datetime.today().date()
+    today = datetime.datetime.today().date()
+    if end_date.weekday() != 2: # if today is not Wednesday
+        end_date = previous_weekday(today, 2)
+    else:
+        end_date = today
     start_date = end_date - pd.Timedelta(days=14)
-    end_date = "2022-07-20"
-    start_date = "2022-07-06"
-
-    # dates = [start_date + datetime.timedelta(days=x) \
-    #     for x in range((end_date - start_date).days)]
-    # dates.append(end_date)
-
-    # TODO: function to download all tel_messages in storage
+    # end_date = "2022-07-20"
+    # start_date = "2022-07-06"
 
     # load telegram data
     telegram_data_path = "./telegram"
     sm_code = "TL"
-    df_messages = pd.DataFrame()
-    # i = 1
-    # for i in range(len(dates)-1):
-    #     date_1 = dates[i].strftime('%Y-%m-%d')
-    #     date_2 = dates[i+1].strftime('%Y-%m-%d')
-    messages_path = telegram_data_path + f"/{config['country-code']}_{sm_code}_messages_{start_date}_{end_date}_latest.csv"
-    df_messages = pd.read_csv(messages_path)
-        # df_messages = df_messages.append(df, ignore_index=True)
-        # # i += 1.
+
+    multiple_dates = False # True/ False  select True if using daily data instead of bi-weekly data
+    if multiple_dates:
+        df_messages = get_daily_messages(start_date, end_date, telegram_data_path, config)
+    else: 
+        messages_path = telegram_data_path + f"/{config['country-code']}_{sm_code}_messages_{start_date}_{end_date}_latest.csv"
+        df_messages = pd.read_csv(messages_path)
 
     # Combine text of post and replies
     df_messages['text_post'] = df_messages['text_post'].fillna("")

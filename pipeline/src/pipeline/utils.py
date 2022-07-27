@@ -38,7 +38,7 @@ from gensim.parsing.preprocessing import STOPWORDS
 # STOPWORDS.append('get')
 from pipeline.GSDMM import MovieGroupProcess
 import ast
-from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import BlobServiceClient, PartialBatchErrorException
 from azure.data.tables import TableServiceClient
 from tqdm import tqdm
 tqdm.pandas()
@@ -48,6 +48,7 @@ nltk.download('punkt')
 import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+import datetime
 
 
 def get_secret_keyvault(secret_name, config):
@@ -273,9 +274,20 @@ def translate_string(row_, translate_client, text_field, model):
             body = [{
                 'text': text
             }]
-            request = requests.post(constructed_url, params=params, headers=headers, json=body)
-            response = request.json()
-            trans = response[0]['translations'][0]['text']
+            translation_done = False
+            retry_times = 0
+            while (not translation_done) and (retry_times <= 5):
+                try:
+                    request = requests.post(constructed_url, params=params, \
+                        headers=headers, json=body)
+                    response = request.json()
+                    trans = response[0]['translations'][0]['text']
+                    translation_done = True
+                except ReadTimeout or ConnectionError as e:
+                    retry_times += 1
+                    sleep(60)
+            if not translation_done:
+                logging.warning(f"unable to translate {text}: {e}")
 
         if pd.isna(trans):
             return text
@@ -309,17 +321,14 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
             'api-version': '3.0',
             'to': ['en'],
         }
-
         if original_language:
             params['from'] = [original_language]
-
         headers = {
             'Ocp-Apim-Subscription-Key': subcription_info["subscription_key"],
             'Ocp-Apim-Subscription-Region': subcription_info["location"],
             'Content-type': 'application/json',
             'X-ClientTraceId': str(uuid.uuid4())
         }
-
         translate_client = [constructed_url, params, headers]
 
     for idx, column in enumerate(text_column):
@@ -751,3 +760,46 @@ def containsNumber(string):
         if character.isdigit():
             return True
     return False
+
+
+def get_daily_messages(start_date, end_date, telegram_data_path, config):
+    '''
+    Download daily scraped Telegram files from storage
+    and merge into one single dataframe
+    '''
+
+    dates = [start_date + datetime.timedelta(days=x) \
+    for x in range((end_date - start_date).days)]
+    dates.append(end_date)
+
+    df_messages = pd.DataFrame()
+    # i = 1
+    for i in range(len(dates)-1):
+        date_1 = dates[i].strftime('%Y-%m-%d')
+        date_2 = dates[i+1].strftime('%Y-%m-%d')
+        messages_path = telegram_data_path + f"/{config['country-code']}_TL_messages_{date_1}_{date_2}_latest.csv"
+        try:
+            blob_client = get_blob_service_client(messages_path, config)
+            with open(messages_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
+            df = pd.read_csv(messages_path)
+            df_messages = df_messages.append(df, ignore_index=True)
+            df_messages.drop_duplicates(subsets=['text_post', 'text_reply', 'datetime'])
+        except PartialBatchErrorException as e:
+            logging.warning(f"unable to get {messages_path}: {e}")
+        # i += 1
+
+    return df_messages
+
+
+def previous_weekday(d, weekday):
+    '''
+    Find the closest past weekday from a given day
+    i.e. what is the closest past Wednesday from today?
+    d: a date in datetime type
+    weekday: 0=Mon, 1=Tue, 2=Wed, ect.
+    '''
+    days_ahead = weekday - d.weekday()
+    if days_ahead >= 0: # Target day already happened this week
+        days_ahead = 7 - days_ahead
+    return d - datetime.timedelta(days_ahead)
