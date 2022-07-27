@@ -807,9 +807,10 @@ def save_to_db(sm_code, data, config):
         connection.close()
         print("Pyodbc connection is closed")
 
+
 def connect_to_db(config):
     # Get credentials
-    database_secret = get_secret_keyvault(config["azure-database-secret"], config)
+    database_secret = get_secret_keyvault("azure-database-secret", config)
     database_secret = json.loads(database_secret)
 
     try:
@@ -824,10 +825,12 @@ def connect_to_db(config):
         )
 
         cursor = connection.cursor()
+        print("Successfully connected to database")
     except pyodbc.Error as error:
         print("Failed to connect to database {}".format(error))
 
     return connection, cursor
+
 
 def containsNumber(string):
     for character in string:
