@@ -799,7 +799,7 @@ def previous_weekday(d, weekday):
     d: a date in datetime type
     weekday: 0=Mon, 1=Tue, 2=Wed, ect.
     '''
-    days_ahead = weekday - d.weekday()
-    if days_ahead >= 0: # Target day already happened this week
-        days_ahead = 7 - days_ahead
-    return d - datetime.timedelta(days_ahead)
+    days_behind = weekday - d.weekday()
+    if days_behind >= 0: # Target day already happened this week
+        days_behind = 7 - days_behind
+    return d - datetime.timedelta(days_behind)
