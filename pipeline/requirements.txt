@@ -90,4 +90,4 @@ wincertstore==0.2
 python-Levenshtein==0.12.2
 openpyxl==3.0.7
 telethon==1.24.0
-pyodbc=4.0.34
+pyodbc==4.0.34

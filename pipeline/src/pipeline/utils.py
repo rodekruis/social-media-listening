@@ -759,6 +759,36 @@ def save_data(name, directory, data, id, sm_code, config):
         with open(data_all_path, "rb") as upload_file:
             blob_client.upload_blob(upload_file, overwrite=True)
 
+
+def read_db(sm_code, start_date, end_date, config):
+    '''
+    Retrieve messages between a certain period from AZ Database
+    '''
+
+    connection, cursor = connect_to_db(config)
+
+    table_name = config["azure-database-name"]
+    query = f"""SELECT * \
+        FROM {table_name} \
+        WHERE sm_code = '{sm_code}' \
+        AND date \
+        BETWEEN '{start_date}' AND '{end_date}' \
+        """
+    try:
+        df_messages = pd.read_sql(query, connection)
+        logging.info(f"Succesfully retrieve {sm_code} messages \
+            from {start_date} to {end_date} from table {table_name}")
+    except Exception:
+        df_messages = None
+        logging.error(f"Failed to retrieve SQL table")
+    finally:
+        cursor.close()
+        connection.close()
+        logging.info("AZ Database connection is closed")
+
+    return df_messages
+
+
 def save_to_db(sm_code, data, config):
 
     # Prepare for storing in Azure db
@@ -773,7 +803,7 @@ def save_to_db(sm_code, data, config):
     current_datetime = datetime.now()
 
     # Make connection to Azure datbase
-    connection, cursor = connect_to_db()
+    connection, cursor = connect_to_db(config)
 
     try:
         mySql_insert_query ="""INSERT INTO smm.messages (ID_SM, Country, SM, Channel, DateTimeScraped,\
@@ -807,14 +837,15 @@ def save_to_db(sm_code, data, config):
         connection.close()
         print("Pyodbc connection is closed")
 
-def connect_to_db():
+
+def connect_to_db(config):
     # Get credentials
-    database_secret = get_secret_keyvault(config["azure-database-secret"], config)
+    database_secret = get_secret_keyvault("azure-database-secret", config)
     database_secret = json.loads(database_secret)
 
     try:
         # Connect to db
-        driver = '{ODBC Driver 17 for SQL Server}'
+        driver = '{ODBC Driver 18 for SQL Server}'
         connection = pyodbc.connect(
             f'DRIVER={driver};'
             f'SERVER=tcp:{database_secret["SQL_DB_SERVER"]};'
