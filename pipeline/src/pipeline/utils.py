@@ -776,7 +776,7 @@ def save_to_db(sm_code, data, config):
     connection, cursor = connect_to_db(config)
 
     try:
-        mySql_insert_query ="""INSERT INTO smm.messages (ID_SM, Country, SM, Channel, DateTimeScraped,\
+        mySql_insert_query =f"""INSERT INTO {config['azure-database-name']} (ID_SM, Country, SM, Channel, DateTimeScraped,\
          DateTimeSent, DateSent, Post, TextPost, TextReply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
         for idx, row in data.iterrows():
