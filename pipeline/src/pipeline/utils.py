@@ -797,15 +797,15 @@ def save_to_db(sm_code, data, config):
 
             connection.commit()
 
-        print(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
+        logging.INFO(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
 
     except pyodbc.Error as error:
-        print("Failed to insert into SQL table {}".format(error))
+        logging.WARNING("Failed to insert into SQL table {}".format(error))
 
     finally:
         cursor.close()
         connection.close()
-        print("Pyodbc connection is closed")
+        logging.INFO("Pyodbc connection is closed")
 
 
 def connect_to_db(config):
@@ -825,9 +825,9 @@ def connect_to_db(config):
         )
 
         cursor = connection.cursor()
-        print("Successfully connected to database")
+        logging.INFO("Successfully connected to database")
     except pyodbc.Error as error:
-        print("Failed to connect to database {}".format(error))
+        logging.INFO("Failed to connect to database {}".format(error))
 
     return connection, cursor
 
