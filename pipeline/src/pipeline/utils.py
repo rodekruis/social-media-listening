@@ -759,6 +759,36 @@ def save_data(name, directory, data, id, sm_code, config):
         with open(data_all_path, "rb") as upload_file:
             blob_client.upload_blob(upload_file, overwrite=True)
 
+
+def read_db(sm_code, start_date, end_date, config):
+    '''
+    Retrieve messages between a certain period from AZ Database
+    '''
+
+    connection, cursor = connect_to_db(config)
+
+    table_name = config["azure-database-name"]
+    query = f"""SELECT * \
+        FROM {table_name} \
+        WHERE sm_code = '{sm_code}' \
+        AND date \
+        BETWEEN '{start_date}' AND '{end_date}' \
+        """
+    try:
+        df_messages = pd.read_sql(query, connection)
+        logging.info(f"Succesfully retrieve {sm_code} messages \
+            from {start_date} to {end_date} from table {table_name}")
+    except Exception:
+        df_messages = None
+        logging.error(f"Failed to retrieve SQL table")
+    finally:
+        cursor.close()
+        connection.close()
+        logging.info("AZ Database connection is closed")
+
+    return df_messages
+
+
 def save_to_db(sm_code, data, config):
 
     # Prepare for storing in Azure db
@@ -770,7 +800,7 @@ def save_to_db(sm_code, data, config):
 
     data = data.astype(object).where(pd.notnull(data), None)
 
-    current_datetime = datetime.now()
+    current_datetime = datetime.datetime.now()
 
     # Make connection to Azure datbase
     connection, cursor = connect_to_db(config)
@@ -815,7 +845,7 @@ def connect_to_db(config):
 
     try:
         # Connect to db
-        driver = '{ODBC Driver 17 for SQL Server}'
+        driver = '{ODBC Driver 18 for SQL Server}'
         connection = pyodbc.connect(
             f'DRIVER={driver};'
             f'SERVER=tcp:{database_secret["SQL_DB_SERVER"]};'
@@ -877,6 +907,6 @@ def previous_weekday(d, weekday):
     weekday: 0=Mon, 1=Tue, 2=Wed, ect.
     '''
     days_behind = weekday - d.weekday()
-    if days_behind >= 0: # Target day already happened this week
-        days_behind = 7 - days_behind
+    if days_behind > 0: # Target day already happened this week
+        days_behind = days_behind - 7
     return d + datetime.timedelta(days_behind)

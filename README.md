@@ -60,10 +60,22 @@ docker run -it --entrypoint /bin/bash rodekruis/rumor-tracker
 TBI
 
 ## Usage
+Command:
 ```
-Usage: run-pipeline [OPTIONS]
-
+run-pipeline [OPTIONS]
+```
 Options:
+  ```
   --config                    configuration file (json)
   --help                      show this message and exit
   ```
+
+
+##  Versions
+
+| Pipeline version | Changes |
+| --- | --- |
+| 0.1.3 | Add function to post non-trigger in off-season |
+| 0.1.2 | Corrected generation of link to raw chirps file <br> Fixed misdownloading a processed rainfall from datalake <br> Fixed raw chirps files listing for calculating zonal statistics <br> Minor fixes |
+| 0.1.1 | ENSO+rainfall model added <br> Minor fixes | 
+| 0.1.0 | Initial version, ENSO-only model |
