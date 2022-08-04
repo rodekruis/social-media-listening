@@ -773,10 +773,10 @@ def save_to_db(sm_code, data, config):
     current_datetime = datetime.now()
 
     # Make connection to Azure datbase
-    connection, cursor = connect_to_db()
+    connection, cursor = connect_to_db(config)
 
     try:
-        mySql_insert_query ="""INSERT INTO smm.messages (ID_SM, Country, SM, Channel, DateTimeScraped,\
+        mySql_insert_query =f"""INSERT INTO {config['azure-database-name']} (ID_SM, Country, SM, Channel, DateTimeScraped,\
          DateTimeSent, DateSent, Post, TextPost, TextReply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
         for idx, row in data.iterrows():
@@ -797,19 +797,20 @@ def save_to_db(sm_code, data, config):
 
             connection.commit()
 
-        print(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
+        logging.INFO(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
 
     except pyodbc.Error as error:
-        print("Failed to insert into SQL table {}".format(error))
+        logging.WARNING("Failed to insert into SQL table {}".format(error))
 
     finally:
         cursor.close()
         connection.close()
-        print("Pyodbc connection is closed")
+        logging.INFO("Pyodbc connection is closed")
 
-def connect_to_db():
+
+def connect_to_db(config):
     # Get credentials
-    database_secret = get_secret_keyvault(config["azure-database-secret"], config)
+    database_secret = get_secret_keyvault("azure-database-secret", config)
     database_secret = json.loads(database_secret)
 
     try:
@@ -824,10 +825,12 @@ def connect_to_db():
         )
 
         cursor = connection.cursor()
+        logging.INFO("Successfully connected to database")
     except pyodbc.Error as error:
-        print("Failed to connect to database {}".format(error))
+        logging.INFO("Failed to connect to database {}".format(error))
 
     return connection, cursor
+
 
 def containsNumber(string):
     for character in string:
