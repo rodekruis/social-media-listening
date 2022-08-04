@@ -49,7 +49,7 @@ nltk.download('punkt')
 import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
-from datetime import datetime
+import datetime
 
 
 def get_secret_keyvault(secret_name, config):
@@ -876,4 +876,4 @@ def previous_weekday(d, weekday):
     days_behind = weekday - d.weekday()
     if days_behind >= 0: # Target day already happened this week
         days_behind = 7 - days_behind
-    return d - datetime.timedelta(days_behind)
+    return d + datetime.timedelta(days_behind)

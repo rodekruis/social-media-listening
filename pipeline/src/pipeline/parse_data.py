@@ -263,12 +263,11 @@ def parse_youtube(config):
 
 def parse_telegram(config):
     today = datetime.datetime.today().date()
-    if end_date.weekday() != 2: # if today is not Wednesday
+    if today.weekday() != 2: # if today is not Wednesday
         end_date = previous_weekday(today, 2)
     else:
         end_date = today
     start_date = end_date - pd.Timedelta(days=14)
-
     # load telegram data
     telegram_data_path = "./telegram"
     sm_code = "TL"
