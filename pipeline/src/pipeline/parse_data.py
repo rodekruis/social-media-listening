@@ -4,7 +4,8 @@ import pandas as pd
 import numpy as np
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, \
     filter_by_keywords, get_blob_service_client, html_decode, predict_topic, \
-    predict_sentiment, save_data, get_word_frequency, get_daily_messages, previous_weekday
+    predict_sentiment, save_data, get_word_frequency, get_daily_messages, \
+    previous_weekday, read_db
 import logging
 import datetime
 import random
@@ -268,17 +269,24 @@ def parse_telegram(config):
     else:
         end_date = today
     start_date = end_date - pd.Timedelta(days=14)
-    # load telegram data
+    # start_date = '2022-07-06'
+    # end_date = '2022-07-07'
+
     telegram_data_path = "./telegram"
     sm_code = "TL"
 
-    #TODO: Implement Reading From Azure Database
-    multiple_dates = False # True/ False  select True if using daily data instead of bi-weekly data
-    if multiple_dates:
-        df_messages = get_daily_messages(start_date, end_date, telegram_data_path, config)
-    else: 
-        messages_path = telegram_data_path + f"/{config['country-code']}_{sm_code}_messages_{start_date}_{end_date}_latest.csv"
-        df_messages = pd.read_csv(messages_path)
+    multiple_files = False # True/ False  select True if using daily data instead of bi-weekly data
+
+    # load telegram data
+    if config['track-azure-database']:
+        df_messages = read_db(sm_code, start_date, end_date, config)
+    else:
+        if multiple_files:
+            df_messages = get_daily_messages(start_date, end_date, telegram_data_path, config)
+        else:
+            messages_filename = f"/{config['country-code']}_{sm_code}_messages_{start_date}_{end_date}_latest.csv"
+            messages_path = telegram_data_path + messages_filename
+            df_messages = pd.read_csv(messages_path)
 
     # Combine text of post and replies
     df_messages['text_post'] = df_messages['text_post'].fillna("")
@@ -340,16 +348,6 @@ def parse_telegram(config):
     # # sentiment analysis
     # if config["analyse-sentiment"]:
     #     df_messages = predict_sentiment(df_messages, next_text_value, config)
-    #
-    # # geolocate messages
-    # if config["geolocate"]:
-    #     df_messages = geolocate_dataframe(df_messages,
-    #                                       config['geodata-locations'],
-    #                                       config['geodata-country-boundaries'],
-    #                                       config['location-input'],
-    #                                       config['location-output'],
-    #                                       [next_text_value],
-    #                                       config)
 
     # topic analysis
     if config["analyse-topic"]:
