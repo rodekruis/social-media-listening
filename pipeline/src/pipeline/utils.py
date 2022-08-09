@@ -806,8 +806,8 @@ def save_to_db(sm_code, data, config):
     connection, cursor = connect_to_db(config)
 
     try:
-        mySql_insert_query =f"""INSERT INTO {config['azure-database-name']} (ID_SM, Country, SM, Channel, DateTimeScraped,\
-         DateTimeSent, DateSent, Post, TextPost, TextReply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        mySql_insert_query =f"""INSERT INTO {config['azure-database-name']} (id_post, country, sm_code, source, datetime_scraped,\
+         datetime, date, post, text_post, text_reply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
         for idx, row in data.iterrows():
 
