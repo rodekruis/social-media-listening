@@ -390,7 +390,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
 
     # Remove Punctuation
     text = re.sub(r"[^\w\s]", "", text)
-    text = text.replace(",", "")
+    text = text.replace(",", " ")
 
     # Declare a dictionary
     dict_word_freq = {}
