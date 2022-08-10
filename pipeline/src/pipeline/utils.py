@@ -386,7 +386,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     text = ''
 
     for msg_text in df_tweets[text_column]:
-        text = text + msg_text
+        text = text + " " + msg_text.lower()
 
     # Remove Punctuation
     text = re.sub(r"[^\w\s]", "", text)
@@ -397,7 +397,6 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
 
     # split all the word of the string.
     text_list = text.split()
-
     # take each word from text_list and count occurence
     for element in text_list:
         # check if each word has '.' at its last. If so then ignore '.'

@@ -269,8 +269,8 @@ def parse_telegram(config):
     else:
         end_date = today
     start_date = end_date - pd.Timedelta(days=14)
-    # start_date = '2022-07-06'
-    # end_date = '2022-07-07'
+    # start_date = '2022-07-20'
+    # end_date = '2022-08-03'
 
     telegram_data_path = "./telegram"
     sm_code = "TL"
