@@ -333,20 +333,21 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
         translate_client = [constructed_url, params, headers]
 
     for idx, column in enumerate(text_column):
-        df_tweets = df_tweets.dropna(subset=[column])
-        df_texts = df_tweets.drop_duplicates(subset=[column])
+        # initialize empty column for translation in original dataframe
+        df_tweets.at[text_column_en[idx]] = np.nan
+
+        # initialize dataframe for translation
+        df_tweets_nona = df_tweets.dropna(subset=[column])
+        df_texts = df_tweets_nona.drop_duplicates(subset=[column])
 
         # translate to english
-        df_texts[column] = df_texts.progress_apply(lambda x:
-                                                   translate_string(x, translate_client, column, model), axis=1)
+        df_texts[text_column_en[idx]] = df_texts.progress_apply(
+            lambda x: translate_string(x, translate_client, column, model),
+            axis=1)
 
-        for ix, row in df_tweets.iterrows():
-            try:
-                df_texts_ = df_texts[df_texts['id'] == row['id']]
-                if len(df_texts_) > 0:
-                    df_tweets.at[ix, text_column_en[idx]] = df_texts_[column].values[0]
-            except:
-                df_tweets.at[ix, text_column_en[idx]] = np.nan
+        # copy back to original dataframe
+        for ix, row in df_texts.iterrows():
+            df_tweets.loc[df_tweets[column] == row[column], text_column_en[idx]] = row[text_column_en[idx]]
 
     return df_tweets
 

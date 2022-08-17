@@ -264,7 +264,7 @@ def parse_youtube(config):
 
 def parse_telegram(config):
     today = datetime.datetime.today().date()
-    if today.weekday() != 2: # if today is not Wednesday
+    if today.weekday() != 2:  # if today is not Wednesday
         end_date = previous_weekday(today, 2)
     else:
         end_date = today
@@ -275,7 +275,7 @@ def parse_telegram(config):
     telegram_data_path = "./telegram"
     sm_code = "TL"
 
-    multiple_files = False # True/ False  select True if using daily data instead of bi-weekly data
+    multiple_files = False  # True/ False  select True if using daily data instead of bi-weekly data
 
     # load telegram data
     if config['track-azure-database']:
@@ -294,10 +294,10 @@ def parse_telegram(config):
 
     # Column that  takes the post text if message is post, else the reply text (needed for word frequencies)
     df_messages['text_combined'] = np.where(
-            df_messages['post'],
-            df_messages['text_post'],
-            df_messages['text_reply']
-        )
+        df_messages['post'],
+        df_messages['text_post'],
+        df_messages['text_reply']
+    )
     # Column that merges the post and reply text (needed for filtering on keywords)
     df_messages['text_merged'] = df_messages['text_post'] + " " + df_messages['text_reply']
 
@@ -327,14 +327,12 @@ def parse_telegram(config):
             topic = file.split("_")[0]
             topics.append(topic)
 
-        df_to_translate = pd.DataFrame()
+        df_to_translate = df_messages.copy()
 
-        for topic in topics:
-            if df_to_translate.empty:
-                df_to_translate = df_messages[df_messages[topic]]
-            else:
-                df_to_translate = pd.concat(
-                    [df_to_translate, df_messages[df_messages[topic]]]).drop_duplicates().reset_index(drop=True)
+        # removing messages which don't belong to any topic
+        for ix, row in df_to_translate.iterrows():
+            if all(row[topic] is False for topic in topics):
+                df_to_translate.drop(ix, inplace=True)
 
         df_messages = translate_dataframe(
             df_to_translate,
@@ -373,20 +371,20 @@ def parse_telegram(config):
         # Drop combined translated text column
         df_messages_topics = df_messages_topics.drop(columns=['text_combined_en'])
         df_messages = df_messages.drop(columns=['text_combined_en'])
-        
+
         # assign topics to messages that were not clustered
         df_messages.drop(df_messages[df_messages['rcrc']].index, inplace=True)
 
         df_messages['topic'] = ""
         df_messages = df_messages.append(df_messages_topics, ignore_index=True)
-        df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic']=="")].index, inplace=True)
+        df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic'] == "")].index, inplace=True)
 
     save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
-                  "telegram",
-                  df_messages,
-                  "id",
-                  sm_code,
-                  config)
+              "telegram",
+              df_messages,
+              "id",
+              sm_code,
+              config)
 
     return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"
 
