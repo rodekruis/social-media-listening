@@ -367,6 +367,9 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
         for ix, row in df_texts.iterrows():
             df_tweets.loc[df_tweets[column] == row[column], text_column_en[idx]] = row[text_column_en[idx]]
 
+    # remove empty rows at the bottom
+    df_tweets.dropna(subset=['id'], inplace=True)
+
     return df_tweets
 
 
