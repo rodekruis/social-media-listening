@@ -5,7 +5,7 @@ import numpy as np
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, \
     filter_by_keywords, get_blob_service_client, html_decode, predict_topic, \
     predict_sentiment, save_data, get_word_frequency, get_daily_messages, \
-    previous_weekday, read_db
+    previous_weekday, read_db, remove_pii
 import logging
 import datetime
 import random
@@ -378,6 +378,10 @@ def parse_telegram(config):
         df_messages['topic'] = ""
         df_messages = df_messages.append(df_messages_topics, ignore_index=True)
         df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic'] == "")].index, inplace=True)
+
+    # remove personally identifiable information
+    if config["remove-pii"]:
+        df_messages = remove_pii(df_messages, ['text_post_en', 'text_reply_en'])
 
     save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
               "telegram",

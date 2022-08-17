@@ -27,16 +27,8 @@ stemmer = PorterStemmer()
 from spellchecker import SpellChecker
 spell = SpellChecker()
 from gensim.parsing.preprocessing import STOPWORDS
-# STOPWORDS = list(STOPWORDS) # TBI move to config
-# STOPWORDS.append('covid')
-# STOPWORDS.append('vaccine')
-# STOPWORDS.append('vaccines')
-# STOPWORDS.append('vaccinated')
-# STOPWORDS.append('namibia')
-# STOPWORDS.append('says')
-# STOPWORDS.append('because')
-# STOPWORDS.append('like')
-# STOPWORDS.append('get')
+from presidio_analyzer import AnalyzerEngine
+from presidio_anonymizer import AnonymizerEngine
 from pipeline.GSDMM import MovieGroupProcess
 import ast
 from azure.storage.blob import BlobServiceClient, PartialBatchErrorException
@@ -296,6 +288,32 @@ def translate_string(row_, translate_client, text_field, model):
             return trans
     else:
         return text
+
+
+def remove_pii(df, text_columns):
+    """
+    remove PII from dataframe
+    """
+    analyzer = AnalyzerEngine()
+    anonymizer = AnonymizerEngine()
+
+    for ix, row in df.iterrows():
+        for text_column in text_columns:
+            text_to_anonymize = row[text_column]
+            if pd.isna(text_to_anonymize) or text_to_anonymize == "":
+                continue
+            # detect PII (analyze)
+            analyzer_results = analyzer.analyze(text=text_to_anonymize,
+                                                score_threshold=0.,
+                                                language='en')
+            # replace PII with entity type (anonymize)
+            anonymized_results = anonymizer.anonymize(
+                text=text_to_anonymize,
+                analyzer_results=analyzer_results
+            )
+            df.at[ix, text_column] = anonymized_results.text
+
+    return df
 
 
 def translate_dataframe(df_tweets, text_column, text_column_en, config, original_language=None):
