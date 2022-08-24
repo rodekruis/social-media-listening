@@ -30,8 +30,6 @@ stemmer = PorterStemmer()
 from spellchecker import SpellChecker
 spell = SpellChecker()
 from gensim.parsing.preprocessing import STOPWORDS
-from presidio_analyzer import AnalyzerEngine
-from presidio_anonymizer import AnonymizerEngine
 from pipeline.GSDMM import MovieGroupProcess
 import ast
 from azure.storage.blob import BlobServiceClient, PartialBatchErrorException
@@ -45,6 +43,7 @@ import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import datetime
+from urllib2 import HTTPError
 
 
 def get_lang_detector(nlp, name):
@@ -301,24 +300,18 @@ def remove_pii(df, text_columns):
     """
     remove PII from dataframe
     """
-    analyzer = AnalyzerEngine()
-    anonymizer = AnonymizerEngine()
 
-    for ix, row in df.iterrows():
+    for ix, row in tqdm(df.iterrows(), total=len(df)):
         for text_column in text_columns:
             text_to_anonymize = row[text_column]
             if pd.isna(text_to_anonymize) or text_to_anonymize == "":
                 continue
-            # detect PII (analyze)
-            analyzer_results = analyzer.analyze(text=text_to_anonymize,
-                                                score_threshold=0.,
-                                                language='en')
-            # replace PII with entity type (anonymize)
-            anonymized_results = anonymizer.anonymize(
-                text=text_to_anonymize,
-                analyzer_results=analyzer_results
-            )
-            df.at[ix, text_column] = anonymized_results.text
+            url = 'https://anonymization-app.azurewebsites.net/anonymize/'
+            response = requests.post(url, json={"text": text_to_anonymize, "model": "ensemble"}).json()
+            if 'anonymized_text' in response.keys():
+                df.at[ix, text_column] = response['anonymized_text']
+            else:
+                logging.WARNING(f"Error with anonymization API: {response}")
 
     return df
 
