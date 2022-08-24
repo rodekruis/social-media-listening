@@ -3,7 +3,10 @@ import pandas as pd
 import numpy as np
 import os
 import operator
-import re
+import spacy
+from spacy.language import Language
+from spacy_language_detection import LanguageDetector
+import stopwordsiso
 import gensim
 from google.cloud import language_v1
 from google.cloud import translate_v2 as translate
@@ -42,6 +45,10 @@ import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import datetime
+
+
+def get_lang_detector(nlp, name):
+    return LanguageDetector(seed=42)  # We use the seed 42
 
 
 def get_secret_keyvault(secret_name, config):
@@ -410,16 +417,42 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     for msg_text in df_tweets[text_column]:
         text = text + " " + msg_text.lower()
 
-    # Remove Punctuation
+    # Remove punctuation
     text = re.sub(r"[^\w\s]", "", text)
     text = text.replace(",", " ")
 
     # Declare a dictionary
     dict_word_freq = {}
 
-    # split all the word of the string.
+    # Split all the words of the string.
     text_list = text.split()
-    # take each word from text_list and count occurence
+
+    # Lemmatize all the words of the string
+    text_list_lemmatized = []
+    language_detector = spacy.load("en_core_web_sm")
+    Language.factory("language_detector", func=get_lang_detector)
+    language_detector.add_pipe('language_detector', last=True)
+    nlp_uk = spacy.load("uk_core_news_sm", disable=["tokenizer", "parser", "ner"])
+    nlp_ru = spacy.load("ru_core_news_sm", disable=["tokenizer", "parser", "ner"])
+    logging.info('Lemmatizing (it might take a while)')
+    for text in tqdm(text_list):
+        doc = language_detector(text)
+        detected_language = doc._.language
+        if 'language' in detected_language.keys():
+            if detected_language['language'] == 'uk':
+                lemmatized_text = " ".join([token.lemma_ for token in nlp_uk(text)])
+            elif detected_language['language'] == 'ru':
+                lemmatized_text = " ".join([token.lemma_ for token in nlp_ru(text)])
+            else:
+                lemmatized_text = text
+            text_list_lemmatized.append(lemmatized_text)
+    text_list = text_list_lemmatized.copy()
+
+    # Remove stopwords and numbers
+    stop_words = stopwordsiso.stopwords(['uk', 'ru'])
+    text_list = [word for word in text_list if word not in stop_words and not word.isnumeric()]
+
+    # Take each word from text_list and count occurence
     for element in text_list:
         # check if each word has '.' at its last. If so then ignore '.'
         if element[-1] == '.':
@@ -446,7 +479,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     df_word_freq.columns = ['Word', 'Frequency']
     df_word_freq['id'] = df_word_freq.index
 
-    # Delete everything with freq lower then 10
+    # Delete everything with freq lower than 10
     threshold = 20
     if config['freq-threshold']:
         threshold = config['freq-threshold']
@@ -468,10 +501,11 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     logging.info(f'Storing word frequencies at {word_freq_path}/{word_freq_filename}')
     df_word_freq.to_csv(word_freq_filepath, index=False)
 
-    logging.info(f'Uploading word frequencies for later use')
-    blob_client = get_blob_service_client(os.path.join(word_freq_blob_path, word_freq_filename), config)
-    with open(word_freq_filepath, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    if not config["skip-datalake"]:
+        logging.info(f'Uploading word frequencies for later use')
+        blob_client = get_blob_service_client(os.path.join(word_freq_blob_path, word_freq_filename), config)
+        with open(word_freq_filepath, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
 
     return
 

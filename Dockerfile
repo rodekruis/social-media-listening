@@ -20,6 +20,11 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
 RUN pip install --upgrade pip && \
 	pip install GDAL==$(gdal-config --version)
 
+# install spaCy modules for NLP
+RUN python -m spacy download uk_core_news_sm
+RUN python -m spacy download ru_core_news_sm
+RUN python -m spacy download en_core_web_sm
+
 ADD config /config
 
 WORKDIR /pipeline
