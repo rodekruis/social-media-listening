@@ -509,9 +509,9 @@ def arrange_telegram_messages(df_messages, message, reply, channel):
     ix = len(df_messages)
     df_messages.at[ix, "source"] = channel
     df_messages.at[ix, "id_post"] = message.id
-    df_messages.at[ix, "text_post"] = message.text
+    df_messages.at[ix, "text_post"] = str(message.text)
     if reply:
-        df_messages.at[ix, "text_reply"] = reply.text
+        df_messages.at[ix, "text_reply"] = str(reply.text)
         df_messages.at[ix, "datetime"] = reply.date
         df_messages.at[ix, "post"] = False
     else:
