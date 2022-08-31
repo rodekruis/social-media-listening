@@ -43,8 +43,7 @@ import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import datetime
-from urllib2 import HTTPError
-
+from urllib.error import HTTPError
 
 def get_lang_detector(nlp, name):
     return LanguageDetector(seed=42)  # We use the seed 42
@@ -875,15 +874,15 @@ def save_to_db(sm_code, data, config):
 
             connection.commit()
 
-        logging.INFO(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
+        logging.info(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
 
     except pyodbc.Error as error:
-        logging.WARNING("Failed to insert into SQL table {}".format(error))
+        logging.warning("Failed to insert into SQL table {}".format(error))
 
     finally:
         cursor.close()
         connection.close()
-        logging.INFO("Pyodbc connection is closed")
+        logging.info("Pyodbc connection is closed")
 
 
 def connect_to_db(config):
@@ -901,12 +900,10 @@ def connect_to_db(config):
             f'UID={database_secret["SQL_USER"]};'
             f'PWD={database_secret["SQL_PASSWORD"]}'
         )
-
         cursor = connection.cursor()
-        logging.INFO("Successfully connected to database")
+        logging.info("Successfully connected to database")
     except pyodbc.Error as error:
-        logging.INFO("Failed to connect to database {}".format(error))
-
+        logging.info("Failed to connect to database {}".format(error))
     return connection, cursor
 
 
