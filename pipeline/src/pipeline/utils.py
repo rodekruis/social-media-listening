@@ -1,3 +1,4 @@
+from cgitb import text
 import preprocessor as tp
 import pandas as pd
 import numpy as np
@@ -303,15 +304,21 @@ def remove_pii(df, text_columns):
 
     for ix, row in tqdm(df.iterrows(), total=len(df)):
         for text_column in text_columns:
+            url = 'https://anonymization-app.azurewebsites.net/anonymize/'
             text_to_anonymize = row[text_column]
             if pd.isna(text_to_anonymize) or text_to_anonymize == "":
-                continue
-            url = 'https://anonymization-app.azurewebsites.net/anonymize/'
-            response = requests.post(url, json={"text": text_to_anonymize, "model": "ensemble"}).json()
-            if 'anonymized_text' in response.keys():
-                df.at[ix, text_column] = response['anonymized_text']
+                df.at[ix, text_column] = text_to_anonymize
+                # continue
             else:
-                logging.WARNING(f"Error with anonymization API: {response}")
+                response = requests.post(url, json={"text": text_to_anonymize, "model": "ensemble"}).json()
+                # print(response)
+                if 'anonymized_text' in response.keys():
+                    df.at[ix, text_column] = response['anonymized_text']
+                    # else:
+                    #     df.at[ix, text_column] = text_to_anonymize
+                else:
+                    logging.WARNING(f"Error with anonymization API: {response}")
+                    print(text_to_anonymize)
 
     return df
 
