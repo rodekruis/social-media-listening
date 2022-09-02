@@ -284,7 +284,7 @@ def translate_string(row_, translate_client, text_field, model):
                     translation_done = True
                 except ReadTimeout or ConnectionError as e:
                     retry_times += 1
-                    sleep(60)
+                    sleep(10)
             if not translation_done:
                 logging.warning(f"unable to translate {text}: {e}")
 
@@ -304,20 +304,25 @@ def remove_pii(df, text_columns):
     for ix, row in tqdm(df.iterrows(), total=len(df)):
         for text_column in text_columns:
             url = 'https://anonymization-app.azurewebsites.net/anonymize/'
+            removePII_done = False
+            retry_times = 0
             text_to_anonymize = row[text_column]
             if pd.isna(text_to_anonymize) or text_to_anonymize == "":
                 df.at[ix, text_column] = text_to_anonymize
-                # continue
-            else:
-                response = requests.post(url, json={"text": text_to_anonymize, "model": "ensemble"}).json()
-                # print(response)
-                if 'anonymized_text' in response.keys():
-                    df.at[ix, text_column] = response['anonymized_text']
-                    # else:
-                    #     df.at[ix, text_column] = text_to_anonymize
-                else:
-                    logging.WARNING(f"Error with anonymization API: {response}")
-                    print(text_to_anonymize)
+                continue
+            while (removePII_done==False) and (retry_times <= 5):
+                try:
+                    request = requests.post(url, json={"text": text_to_anonymize, "model": "ensemble"})#.json()
+                    response = request.json()
+                    print(response)
+                    if 'anonymized_text' in response.keys():
+                        df.at[ix, text_column] = response['anonymized_text']
+                    removePII_done = True
+                except: # if error raised
+                    retry_times += 1
+                    sleep(10)
+            if not removePII_done:
+                logging.WARNING(f"Error with anonymization API: {response}")
 
     return df
 
