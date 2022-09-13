@@ -12,6 +12,7 @@ from telethon.tl.functions.channels import GetFullChannelRequest
 from pipeline.utils import get_blob_service_client, get_secret_keyvault, arrange_facebook_replies, arrange_telegram_messages, save_data
 import logging
 import datetime
+import yaml
 
 # -*- coding: utf-8 -*-
 try:
@@ -296,9 +297,20 @@ def get_facebook(config):
         config)
 
 
-def get_telegram(config):
+def get_telegram(config, days):
 
     logging.info("Getting telegram data")
+
+    end_date = datetime.datetime.today().date()
+    start_date = end_date - pd.Timedelta(days=days)
+
+    # load channel links
+    blob_client = get_blob_service_client(config["telegram-channels-file"], config)
+    with open(config["telegram-channels-file"], "wb") as download_file:
+        download_file.write(blob_client.download_blob().readall())
+    with open(config["telegram-channels-file"], "r") as file:
+        channels_file = yaml.load(file, Loader=yaml.FullLoader)
+    telegram_channels = channels_file["telegram-channels"]
 
     #get data from telegram
     telegram_secrets = get_secret_keyvault("telegram-secret", config)
@@ -311,10 +323,6 @@ def get_telegram(config):
     )
     telegram_client.connect()  # start(bot_token=telegram_secrets["bot-token"])
     logging.info("Telegram client connected")
-
-    telegram_channels = config["telegram-channels"]
-    end_date = datetime.datetime.today().date()
-    start_date = end_date - pd.Timedelta(days=14)
 
     df_messages = pd.DataFrame()
     df_member_counts = pd.DataFrame()
@@ -355,6 +363,9 @@ def get_telegram(config):
         except Exception as e:
             logging.error(f"in getting in telegram channel {channel}: {e}")
 
+    telegram_client.disconnect()
+    logging.info("Telegram client disconnected")
+
     # Add index column
     df_member_counts.reset_index(inplace=True)
     df_member_counts['id'] = df_member_counts.index
@@ -375,6 +386,3 @@ def get_telegram(config):
               "id",
               "TL",
               config)
-
-    telegram_client.disconnect()
-    logging.info("Telegram client disconnected")
