@@ -33,9 +33,10 @@ logging.getLogger("requests_oauthlib").setLevel(logging.WARNING)
 
 
 @click.command()
-@click.option("--config", default="romania.yaml", help="configuration file (json)")
+@click.option("--config", default="romania.yaml", help="configuration file (yaml)")
+@click.option("--days", default=14, help="number of days to be scraped (14 by default)")
 @click.option("--keep", default="", help="keep first N messages (all if empty)")
-def main(config, keep):
+def main(config, days, keep):
 
     utc_timestamp = (
         datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
@@ -168,7 +169,7 @@ def main(config, keep):
     if config["track-telegram-groups"]:
         if config["get-data"]:
             try:
-                get_telegram(config)
+                get_telegram(config, days)
             except Exception as e:
                 logging.error(f"in getting telegram data: {e}")
                 traceback.print_exception(*sys.exc_info())

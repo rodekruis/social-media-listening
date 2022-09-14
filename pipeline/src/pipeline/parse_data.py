@@ -272,7 +272,7 @@ def parse_telegram(config):
     multiple_files = False  # True/ False  select True if using daily data instead of bi-weekly data
 
     # load telegram data
-    if config['track-azure-database']:
+    if not config['skip-database']:
         df_messages = read_db(sm_code, start_date, end_date, config)
     else:
         if multiple_files:
@@ -324,9 +324,7 @@ def parse_telegram(config):
         df_to_translate = df_messages.copy()
 
         # removing messages which don't belong to any topic
-        for ix, row in df_to_translate.iterrows():
-            if all(row[topic] is False for topic in topics):
-                df_to_translate.drop(ix, inplace=True)
+        df_to_translate = df_to_translate[df_to_translate[[topic for topic in topics]].any(axis=1)]
 
         df_messages = translate_dataframe(
             df_to_translate,

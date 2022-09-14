@@ -379,7 +379,7 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
             df_tweets.loc[df_tweets[column] == row[column], text_column_en[idx]] = row[text_column_en[idx]]
 
     # remove empty rows at the bottom
-    df_tweets.dropna(subset=['id'], inplace=True)
+    df_tweets.dropna(subset=['id_post'], inplace=True)
 
     return df_tweets
 
@@ -786,10 +786,6 @@ def save_data(name, directory, data, id, sm_code, config):
         blob_client = get_blob_service_client(f'{directory}/{name}_latest.csv', config)
         with open(tweets_path, "rb") as upload_file:
             blob_client.upload_blob(upload_file, overwrite=True)
-
-    # upload to database
-    if not config["skip-database"]:
-        save_to_db(sm_code, data, config)
 
     # append to existing twitter dataframe
     final_table_columns = ["index", "source", "member_count", "message_count", \
