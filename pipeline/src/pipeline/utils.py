@@ -787,37 +787,32 @@ def save_data(name, directory, data, id, sm_code, config):
         with open(tweets_path, "rb") as upload_file:
             blob_client.upload_blob(upload_file, overwrite=True)
 
-    # upload to database
-    if not config["skip-database"]:
-        if 'post' in data.columns:
-            save_to_db(sm_code, data, config)
+    # append to existing twitter dataframe
+    final_table_columns = ["index", "source", "member_count", "message_count", \
+        "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
+    data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)
+    if containsNumber(name):
+        name = "_".join(name.split('_')[0:3])
+    data_all_path = f"./{directory}/{name}_all.csv"
+    try:
+        if not config["skip-datalake"]:
+            blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
+            with open(data_all_path, "wb") as download_file:
+                download_file.write(blob_client.download_blob().readall())
+        data_old = pd.read_csv(data_all_path)  # , lines=True)
+        data_all = data_old.append(data, ignore_index=True)
+    except:
+        data_all = data.copy()
 
-    # # append to existing twitter dataframe
-    # final_table_columns = ["index", "source", "member_count", "message_count", \
-    #     "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
-    # data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)
-    # if containsNumber(name):
-    #     name = "_".join(name.split('_')[0:3])
-    # data_all_path = f"./{directory}/{name}_all.csv"
-    # try:
-    #     if not config["skip-datalake"]:
-    #         blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
-    #         with open(data_all_path, "wb") as download_file:
-    #             download_file.write(blob_client.download_blob().readall())
-    #     data_old = pd.read_csv(data_all_path)  # , lines=True)
-    #     data_all = data_old.append(data, ignore_index=True)
-    # except:
-    #     data_all = data.copy()
+    # drop duplicates and save
+    data_all = data_all.drop_duplicates(subset=[id])
+    data_all.to_csv(data_all_path, index=False, encoding="utf-8")
 
-    # # drop duplicates and save
-    # data_all = data_all.drop_duplicates(subset=[id])
-    # data_all.to_csv(data_all_path, index=False, encoding="utf-8")
-
-    # # upload to datalake
-    # if not config["skip-datalake"]:
-    #     blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
-    #     with open(data_all_path, "rb") as upload_file:
-    #         blob_client.upload_blob(upload_file, overwrite=True)
+    # upload to datalake
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client(f'{directory}/{name}_all.csv', config)
+        with open(data_all_path, "rb") as upload_file:
+            blob_client.upload_blob(upload_file, overwrite=True)
 
 
 def read_db(sm_code, start_date, end_date, config):

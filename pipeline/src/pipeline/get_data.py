@@ -9,7 +9,8 @@ import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest
-from pipeline.utils import get_blob_service_client, get_secret_keyvault, arrange_facebook_replies, arrange_telegram_messages, save_data
+from pipeline.utils import get_blob_service_client, get_secret_keyvault, arrange_facebook_replies, arrange_telegram_messages, \
+    save_data, save_to_db
 import logging
 import datetime
 import yaml
@@ -342,22 +343,23 @@ def get_telegram(config, days):
                 df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
                 if channel_entity.broadcast and message.post and message.replies:
                     df_replies = pd.DataFrame()
-                    for reply in telegram_client.iter_messages(
-                        channel_entity,
-                        reply_to=message.id,
-                        wait_time = 2
-                    ):
-                        df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
-                        time.sleep(5)
-                    df_messages = df_messages.append(df_replies, ignore_index=True)
-
-            idx = len(df_member_counts)
-            df_member_counts.at[idx, 'source'] = channel
-            member_count = channel_full_info.full_chat.participants_count
-            df_member_counts.at[idx, 'member_count'] = member_count
-            df_member_counts.at[idx, 'date'] = end_date
-            df_member_counts.at[idx, 'message_count'] = len(df_messages[df_messages['source']==channel])
-            
+                    try:
+                        for reply in telegram_client.iter_messages(
+                            channel_entity,
+                            reply_to=message.id,
+                            wait_time = 5
+                        ):
+                            df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
+                            time.sleep(5)
+                        df_messages = df_messages.append(df_replies, ignore_index=True)
+                    except Exception as e:
+                        logging.info(f"getting replies for {message.id} failed: {e}")
+                idx = len(df_member_counts)
+                df_member_counts.at[idx, 'source'] = channel
+                member_count = channel_full_info.full_chat.participants_count
+                df_member_counts.at[idx, 'member_count'] = member_count
+                df_member_counts.at[idx, 'date'] = end_date
+                df_member_counts.at[idx, 'message_count'] = len(df_messages[df_messages['source']==channel])
             logging.info(f"finish telegram channel {channel}, sleep 10 seconds")
             time.sleep(10)
         except Exception as e:
@@ -374,6 +376,7 @@ def get_telegram(config, days):
     df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
 
     logging.info("Saving Telegram data")
+    save_to_db("TL", df_messages, config)
     save_data(f"{config['country-code']}_TL_messages_{start_date}_{end_date}",
               "telegram",
               df_messages,
