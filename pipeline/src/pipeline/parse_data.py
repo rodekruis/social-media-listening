@@ -5,7 +5,7 @@ import numpy as np
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, \
     filter_by_keywords, get_blob_service_client, html_decode, predict_topic, \
     predict_sentiment, save_data, get_word_frequency, get_daily_messages, \
-    previous_weekday, read_db, remove_pii
+    previous_weekday, read_db, remove_pii, classify_text
 import logging
 import datetime
 import random
@@ -278,7 +278,7 @@ def parse_telegram(config):
         if multiple_files:
             df_messages = get_daily_messages(start_date, end_date, telegram_data_path, config)
         else:
-            messages_filename = f"/{config['country-code']}_{sm_code}_messages_{start_date}_{end_date}_latest.csv"
+            messages_filename = f"/{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}_latest.csv"
             messages_path = telegram_data_path + messages_filename
             df_messages = pd.read_csv(messages_path)
 
@@ -339,15 +339,18 @@ def parse_telegram(config):
     # if config["analyse-sentiment"]:
     #     df_messages = predict_sentiment(df_messages, next_text_value, config)
 
+    # Create combined translated text column to train model on
+    df_messages['text_combined_en'] = np.where(
+        df_messages['post'],
+        df_messages['text_post_en'],
+        df_messages['text_reply_en']
+    )
+
+    if config["classify-text"]:
+        classify_text(df_messages, 'text_combined_en', sm_code, start_date, end_date, config)
+
     # topic analysis
     if config["analyse-topic"]:
-        # Create combined translated text column to train model on
-        df_messages['text_combined_en'] = np.where(
-            df_messages['post'],
-            df_messages['text_post_en'],
-            df_messages['text_reply_en']
-        )
-
         # analyse topic RED CROSS and CVA
         df_messages_1 = df_messages[
             (df_messages["rcrc"]) &

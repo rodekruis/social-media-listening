@@ -769,6 +769,87 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
     return df_tweets
 
 
+def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config):
+
+    labels = [
+        'army',
+        'asylum',
+        'registration',
+        'clothing',
+        'contact',
+        'channels',
+        'online',
+        'education',
+        'school',
+        'feedback',
+        'sentiment',
+        'food',
+        'health',
+        'people',
+        'information',
+        'language',
+        'location',
+        'movement',
+        'travel',
+        'need',
+        'payment',
+        'cash',
+        'pets',
+        'question',
+        'shelter',
+        'housing',
+        'time',
+        'united nations',
+        'work',
+        'taxes'
+    ]
+
+    results = pd.DataFrame(columns=['text', 'label', 'score'])
+
+    for idx, row in tqdm(df_tweets.iterrows(), total=df_tweets.shape[0]):
+        message = row['text_combined_en']
+        result = classify_api_call(message, labels)
+        results.append(result, ignore_index=True)
+
+    results = results.pivot(index='text', columns='label', values='score').reset_index()
+
+    df_classified_text = pd.DataFrame()
+    for label in labels:
+        df_tmp = results[['text', label]]
+        df_tmp.sort_values(by=label, inplace=True)
+
+        df_tmp = df_tmp.head(100)
+
+        df_tmp.reset_index(drop=True, inplace=True)
+        df_classified_text.reset_index(drop=True, inplace=True)
+
+        df_classified_text = pd.concat(
+            [
+                df_classified_text,
+                df_tmp
+            ],
+            axis=1
+        )
+
+    df_classified_text.to_csv(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}.csv", index=False)
+
+    return
+
+async def classify_api_call(text, labels):
+
+    url = 'http://language-model.westeurope.cloudapp.azure.com/classify/'
+
+    payload = {
+        'text': text,
+        'labels': labels,
+        'multi_label': True
+    }
+
+    result = await requests.post(url, json=payload).json()
+
+    return result
+
+
 def save_data(name, directory, data, id, sm_code, config):
     """
     both locally and in the datalake:
