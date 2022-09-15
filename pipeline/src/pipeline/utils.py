@@ -282,7 +282,7 @@ def translate_string(row_, translate_client, text_field, model):
                     response = request.json()
                     trans = response[0]['translations'][0]['text']
                     translation_done = True
-                except ReadTimeout or ConnectionError as e:
+                except Exception as e:
                     retry_times += 1
                     sleep(10)
             if not translation_done:
@@ -314,7 +314,6 @@ def remove_pii(df, text_columns):
                 try:
                     request = requests.post(url, json={"text": text_to_anonymize, "model": "ensemble"})#.json()
                     response = request.json()
-                    print(response)
                     if 'anonymized_text' in response.keys():
                         df.at[ix, text_column] = response['anonymized_text']
                     removePII_done = True
