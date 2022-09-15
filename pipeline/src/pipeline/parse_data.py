@@ -272,7 +272,7 @@ def parse_telegram(config):
     multiple_files = False  # True/ False  select True if using daily data instead of bi-weekly data
 
     # load telegram data
-    if not config['skip-database']:
+    if not config['track-azure-database']:
         df_messages = read_db(sm_code, start_date, end_date, config)
     else:
         if multiple_files:
