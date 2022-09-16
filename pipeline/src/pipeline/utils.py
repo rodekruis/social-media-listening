@@ -302,6 +302,7 @@ def remove_pii(df, text_columns):
     remove PII from dataframe
     """
 
+    logging.info('Removing PII')
     for ix, row in tqdm(df.iterrows(), total=len(df)):
         for text_column in text_columns:
             url = 'https://anonymization-app.azurewebsites.net/anonymize/'
@@ -386,7 +387,7 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
 
 
 def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_conflict'):
-    logging.info("Filtering by keywords")
+
     df_tweets[filter_name] = False
 
     for text_column in text_columns:
@@ -405,10 +406,8 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
             )
         )
 
-        # df_tweets['PII'] = df_tweets['text'].apply(lambda x: re.match(r'.\d\d\d\d\d+', x))
-
     # df_tweets = df_tweets[df_tweets['is_conflict']].drop(columns=['is_conflict'])
-    logging.info("Done with filtering")
+    logging.info(f"Done with filtering {filter_name}")
     return df_tweets
 
 
@@ -771,6 +770,9 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
 
 
 def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config):
+    
+    
+    logging.info('Classifying messages')
 
     n_examples = 100
     n_jobs = 5
@@ -801,18 +803,29 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
         'work',
         'taxes'
     ]
-
-    df_results = pd.DataFrame(columns=['sequence', 'labels', 'scores'])
-    for idx, row in tqdm(df_tweets.iterrows(), total=df_tweets.shape[0]):
+    
+    # score all messages
+    df_results = pd.DataFrame(columns=labels)
+    df_results[text_column] = df_tweets[text_column]
+    df_results = df_results[df_results[text_column].str.len() > 10] # filter short messages
+    # df_results = pd.DataFrame(columns=['sequence', 'labels', 'scores'])
+    for idx, row in tqdm(df_results.iterrows(), total=df_results.shape[0]):
         message = row[text_column]
-        result = classify_api_call(message, labels)
-        df_results = df_results.append(result, ignore_index=True)
-    df_results = df_results.set_index(['sequence']).apply(pd.Series.explode).reset_index()
-    df_results = df_results.pivot(index='sequence', columns='labels', values='scores').reset_index()
+        result = request_classification(message, labels)
+        for label, score in zip(result['labels'], result['scores']):
+            df_results.at[idx, label] = score
+    #     df_results = df_results.append(result, ignore_index=True)
+    # df_results = df_results.set_index(['sequence']).apply(pd.Series.explode).reset_index()
+    # df_results.dropna(inplace=True)
+    # df_results.to_csv('classifying.csv')
+    # df_results = df_results.pivot_table(index='sequence', columns='labels', \
+    #     values='scores').reset_index()
+
+    # select messages with highest scores per label
     df_classified_text = pd.DataFrame()
     for label in labels:
-        df_tmp = df_results[['sequence', label]]
-        df_tmp.sort_values(by=label, inplace=True)
+        df_tmp = df_results[[text_column, label]]
+        df_tmp.sort_values(by=label, ascending=False, inplace=True)
         df_tmp = df_tmp.head(n_examples)
         df_tmp.reset_index(drop=True, inplace=True)
         df_classified_text.reset_index(drop=True, inplace=True)
@@ -821,13 +834,14 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
                 df_classified_text,
                 df_tmp
             ],
+            # keys= [f"{label} - text", f"{label} - score",],
             axis=1
         )
     # create label "other" with the sum of all scores
     # rationale: messages with LOWEST total score are the least well classified and thus potentially interesting
     df_results['sum_scores'] = df_results[labels].sum(axis=1)
     df_results = df_results.sort_values(by='sum_scores', ascending=True)
-    best_examples = df_results.iloc[:n_examples]['sequence']
+    best_examples = df_results.iloc[:n_examples][text_column]
     scores = df_results.iloc[:n_examples]['sum_scores']
     df_other = pd.concat([best_examples.reset_index(drop=True), \
         scores.reset_index(drop=True)], axis=1)
@@ -843,7 +857,7 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
     return df_classified_text
 
 
-def classify_api_call(text, labels):
+def request_classification(text, labels):
 
     url = 'http://language-model.westeurope.cloudapp.azure.com/classify/'
     payload = {
