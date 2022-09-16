@@ -45,6 +45,7 @@ from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import datetime
 from urllib.error import HTTPError
+from joblib import Parallel, delayed
 
 def get_lang_detector(nlp, name):
     return LanguageDetector(seed=42)  # We use the seed 42
@@ -378,7 +379,8 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
             df_tweets.loc[df_tweets[column] == row[column], text_column_en[idx]] = row[text_column_en[idx]]
 
     # remove empty rows at the bottom
-    df_tweets.dropna(subset=['id_post'], inplace=True)
+    if 'id_post' in df_tweets.keys():
+        df_tweets.dropna(subset=['id_post'], inplace=True)
 
     return df_tweets
 
@@ -483,9 +485,9 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     df_word_freq['id'] = df_word_freq.index
 
     # Delete everything with freq lower than 10
-    threshold = 20
     if config['freq-threshold']:
         threshold = config['freq-threshold']
+    # threshold = 1
 
     df_word_freq = df_word_freq[df_word_freq['Frequency'] >= threshold]
 
@@ -770,58 +772,50 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
 
 def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config):
 
+    n_examples = 100
+    n_jobs = 5
+
     labels = [
         'army',
-        'asylum',
-        'registration',
+        'asylum or registration',
         'clothing',
         'contact',
         'channels',
         'online',
-        'education',
-        'school',
-        'feedback',
-        'sentiment',
+        'education or school',
+        'feedback or sentiment',
         'food',
         'health',
         'people',
         'information',
         'language',
         'location',
-        'movement',
-        'travel',
+        'movement or travel',
         'need',
-        'payment',
-        'cash',
+        'payment or cash',
         'pets',
         'question',
-        'shelter',
-        'housing',
+        'shelter or housing',
         'time',
         'united nations',
         'work',
         'taxes'
     ]
 
-    results = pd.DataFrame(columns=['text', 'label', 'score'])
-
+    df_results = pd.DataFrame(columns=['sequence', 'labels', 'scores'])
     for idx, row in tqdm(df_tweets.iterrows(), total=df_tweets.shape[0]):
-        message = row['text_combined_en']
+        message = row[text_column]
         result = classify_api_call(message, labels)
-        results.append(result, ignore_index=True)
-
-    results = results.pivot(index='text', columns='label', values='score').reset_index()
-
+        df_results = df_results.append(result, ignore_index=True)
+    df_results = df_results.set_index(['sequence']).apply(pd.Series.explode).reset_index()
+    df_results = df_results.pivot(index='sequence', columns='labels', values='scores').reset_index()
     df_classified_text = pd.DataFrame()
     for label in labels:
-        df_tmp = results[['text', label]]
+        df_tmp = df_results[['sequence', label]]
         df_tmp.sort_values(by=label, inplace=True)
-
-        df_tmp = df_tmp.head(100)
-
+        df_tmp = df_tmp.head(n_examples)
         df_tmp.reset_index(drop=True, inplace=True)
         df_classified_text.reset_index(drop=True, inplace=True)
-
         df_classified_text = pd.concat(
             [
                 df_classified_text,
@@ -829,22 +823,46 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
             ],
             axis=1
         )
+    # create label "other" with the sum of all scores
+    # rationale: messages with LOWEST total score are the least well classified and thus potentially interesting
+    df_results['sum_scores'] = df_results[labels].sum(axis=1)
+    df_results = df_results.sort_values(by='sum_scores', ascending=True)
+    best_examples = df_results.iloc[:n_examples]['sequence']
+    scores = df_results.iloc[:n_examples]['sum_scores']
+    df_other = pd.concat([best_examples.reset_index(drop=True), \
+        scores.reset_index(drop=True)], axis=1)
+    df_other.rename(columns={'sum_scores': 'other'}, inplace=True)
+    df_classified_text = pd.concat(
+    [
+        df_classified_text,
+        df_other
+    ],
+    axis=1
+    )
 
-    df_classified_text.to_csv(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}.csv", index=False)
+    return df_classified_text
 
-    return
 
-async def classify_api_call(text, labels):
+def classify_api_call(text, labels):
 
     url = 'http://language-model.westeurope.cloudapp.azure.com/classify/'
-
     payload = {
         'text': text,
         'labels': labels,
         'multi_label': True
     }
-
-    result = await requests.post(url, json=payload).json()
+    classification_done = False
+    retry_times = 0
+    while (not classification_done) and (retry_times <= 5):
+        try:
+            result = requests.post(url, json=payload).json()
+            classification_done = True
+        except Exception as e:
+            retry_times += 1
+            sleep(10)
+    if not classification_done:
+        logging.warning(f"unable to translate {text}: {e}")
+        result = None
 
     return result
 
@@ -885,7 +903,10 @@ def save_data(name, directory, data, id, sm_code, config):
         data_all = data.copy()
 
     # drop duplicates and save
-    data_all = data_all.drop_duplicates(subset=[id])
+    try:
+        data_all = data_all.drop_duplicates(subset=[id])
+    except:
+        pass
     data_all.to_csv(data_all_path, index=False, encoding="utf-8")
 
     # upload to datalake
@@ -906,6 +927,7 @@ def read_db(sm_code, start_date, end_date, config):
     query = f"""SELECT * \
         FROM {table_name} \
         WHERE sm_code = '{sm_code}' \
+        AND country = '{config['country-code']}' \
         AND date \
         BETWEEN '{start_date}' AND '{end_date}' \
         """

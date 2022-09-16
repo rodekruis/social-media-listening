@@ -278,7 +278,7 @@ def parse_telegram(config):
         if multiple_files:
             df_messages = get_daily_messages(start_date, end_date, telegram_data_path, config)
         else:
-            messages_filename = f"/{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}_latest.csv"
+            messages_filename = f"/{config['country-code']}_{sm_code}_messages_{start_date}_{end_date}_latest.csv"
             messages_path = telegram_data_path + messages_filename
             df_messages = pd.read_csv(messages_path)
 
@@ -340,14 +340,21 @@ def parse_telegram(config):
     #     df_messages = predict_sentiment(df_messages, next_text_value, config)
 
     # Create combined translated text column to train model on
-    df_messages['text_combined_en'] = np.where(
-        df_messages['post'],
-        df_messages['text_post_en'],
-        df_messages['text_reply_en']
-    )
+    if config["classify-text"] or config["analyse-topic"] or config["remove-pii"]:
+        df_messages['text_combined_en'] = np.where(
+            df_messages['post'],
+            df_messages['text_post_en'],
+            df_messages['text_reply_en']
+        )
 
     if config["classify-text"]:
-        classify_text(df_messages, 'text_combined_en', sm_code, start_date, end_date, config)
+        df_classified = classify_text(df_messages, 'text_combined_en', sm_code, start_date, end_date, config)
+        save_data(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}",
+                  "telegram",
+                  df_classified,
+                  "id",
+                  sm_code,
+                  config)
 
     # topic analysis
     if config["analyse-topic"]:
@@ -378,12 +385,13 @@ def parse_telegram(config):
     if config["remove-pii"]:
         df_messages = remove_pii(df_messages, ['text_post_en', 'text_reply_en'])
 
-    save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
-              "telegram",
-              df_messages,
-              "id",
-              sm_code,
-              config)
+    if config["translate"] or config["analyse-topic"] or config["remove-pii"]:
+        save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
+                "telegram",
+                df_messages,
+                "id",
+                sm_code,
+                config)
 
     return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"
 
