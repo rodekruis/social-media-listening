@@ -181,14 +181,14 @@ def main(config, days, keep):
                 logging.error(f"in parsing telegram data: {e}")
                 traceback.print_exception(*sys.exc_info())
 
-    if len(data_to_merge) > 0:
-        try:
-            merge_sources(data_to_merge, config)
-        except Exception as e:
-            logging.error(f"in merging data: {e}")
-            traceback.print_exception(*sys.exc_info())
-    else:
-        logging.warning("No data to merge, skipping")
+    # if len(data_to_merge) > 0:
+    #     try:
+    #         merge_sources(data_to_merge, config)
+    #     except Exception as e:
+    #         logging.error(f"in merging data: {e}")
+    #         traceback.print_exception(*sys.exc_info())
+    # else:
+    #     logging.warning("No data to merge, skipping")
 
     logging.info("Python timer trigger function ran at %s", utc_timestamp)
 
