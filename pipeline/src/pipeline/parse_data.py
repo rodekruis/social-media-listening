@@ -5,7 +5,7 @@ import numpy as np
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, \
     filter_by_keywords, get_blob_service_client, html_decode, predict_topic, \
     predict_sentiment, save_data, get_word_frequency, get_daily_messages, \
-    previous_weekday, read_db, remove_pii, classify_text
+    previous_weekday, read_db, remove_pii, classify_text, download_blob
 import logging
 import datetime
 import random
@@ -304,11 +304,11 @@ def parse_telegram(config):
 
     if config["filter-by-keywords"]:
         keyword_files = config["keyword-files"]
-
         for file in keyword_files:
             topic = file.split("_")[0]
-
-            df_keywords = pd.read_csv(f"../config/{file}")
+            keyword_filepath = f"/config/{file}"
+            download_blob(keyword_filepath, config)
+            df_keywords = pd.read_csv(f"../{keyword_filepath}")
             keywords = df_keywords.dropna()['keyword'].tolist()
             df_messages = filter_by_keywords(df_messages, ['text_merged'], keywords, topic)
 
@@ -337,17 +337,17 @@ def parse_telegram(config):
         )
 
         df_messages['text_post_en'] = df_messages['text_post_en'].fillna(method='ffill')
-        df_messages.to_csv(f"{config['country-code']}_{sm_code}_messagestranslated_{start_date}_{end_date}.csv")
-        # save_data(f"{config['country-code']}_{sm_code}_messagestranslated_{start_date}_{end_date}",
-        #           "telegram",
-        #           df_messages,
-        #           "id",
-        #           sm_code,
-        #           config)
+        df_translated = df_messages.copy()
+        save_data(f"{config['country-code']}_{sm_code}_messagestranslated_{start_date}_{end_date}",
+                  "telegram",
+                  df_translated,
+                  "id",
+                  sm_code,
+                  config)
 
-    # # sentiment analysis
-    # if config["analyse-sentiment"]:
-    #     df_messages = predict_sentiment(df_messages, next_text_value, config)
+    # sentiment analysis
+    if config["analyse-sentiment"]:
+        df_messages = predict_sentiment(df_messages, 'text_post_en', config)
 
     # remove personally identifiable information
     if config["remove-pii"]:
@@ -395,7 +395,7 @@ def parse_telegram(config):
         df_messages = df_messages.append(df_messages_topics, ignore_index=True)
         df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic'] == "")].index, inplace=True)
 
-    if config["translate"] or config["analyse-topic"] or config["remove-pii"]:
+    if config["analyse-topic"] or config["remove-pii"]:
         save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
                 "telegram",
                 df_messages,

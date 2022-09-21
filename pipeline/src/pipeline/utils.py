@@ -276,7 +276,7 @@ def translate_string(row_, translate_client, text_field, model):
             }]
             translation_done = False
             retry_times = 0
-            while (not translation_done) and (retry_times <= 5):
+            while (not translation_done) and (retry_times <= 10):
                 try:
                     request = requests.post(constructed_url, params=params, \
                         headers=headers, json=body)
@@ -312,7 +312,7 @@ def remove_pii(df, text_columns):
             if pd.isna(text_to_anonymize) or text_to_anonymize == "":
                 df.at[ix, text_column] = text_to_anonymize
                 continue
-            while (removePII_done==False) and (retry_times <= 5):
+            while (removePII_done==False) and (retry_times <= 10):
                 try:
                     request = requests.post(url, json={"text": text_to_anonymize, "model": "ensemble"})#.json()
                     response = request.json()
@@ -808,18 +808,11 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
     df_results = pd.DataFrame(columns=labels)
     df_results[text_column] = df_tweets[text_column]
     df_results = df_results[df_results[text_column].str.len() > 10] # filter short messages
-    # df_results = pd.DataFrame(columns=['sequence', 'labels', 'scores'])
     for idx, row in tqdm(df_results.iterrows(), total=df_results.shape[0]):
         message = row[text_column]
         result = request_classification(message, labels)
         for label, score in zip(result['labels'], result['scores']):
             df_results.at[idx, label] = score
-    #     df_results = df_results.append(result, ignore_index=True)
-    # df_results = df_results.set_index(['sequence']).apply(pd.Series.explode).reset_index()
-    # df_results.dropna(inplace=True)
-    # df_results.to_csv('classifying.csv')
-    # df_results = df_results.pivot_table(index='sequence', columns='labels', \
-    #     values='scores').reset_index()
 
     # select messages with highest scores per label
     df_classified_text = pd.DataFrame()
@@ -859,7 +852,7 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
 
 def request_classification(text, labels):
 
-    url = 'http://language-model.westeurope.cloudapp.azure.com/classify/'
+    url = 'http://text-classification.westeurope.cloudapp.azure.com/classify/'
     payload = {
         'text': text,
         'labels': labels,
@@ -867,7 +860,7 @@ def request_classification(text, labels):
     }
     classification_done = False
     retry_times = 0
-    while (not classification_done) and (retry_times <= 5):
+    while (not classification_done) and (retry_times <= 10):
         try:
             result = requests.post(url, json=payload).json()
             classification_done = True
@@ -1066,6 +1059,13 @@ def get_daily_messages(start_date, end_date, telegram_data_path, config):
         # i += 1
 
     return df_messages
+
+
+def download_blob(blob_path, config):
+    blob_client = get_blob_service_client(blob_path, config)
+    local_path = blob_path
+    with open(local_path, "wb") as download_file:
+        download_file.write(blob_client.download_blob().readall())
 
 
 def previous_weekday(d, weekday):
