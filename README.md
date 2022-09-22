@@ -1,7 +1,7 @@
 # rumor-tracker
 
 Track specific topic(s) in news and social media.
-Featuring: geolocation, translation to English, [sentiment analysis](https://en.wikipedia.org/wiki/Sentiment_analysis), and [topic modelling](https://en.wikipedia.org/wiki/Topic_model).
+Featuring: geolocation, translation to English, [sentiment analysis](https://en.wikipedia.org/wiki/Sentiment_analysis), and [topic modelling](https://en.wikipedia.org/wiki/Topic_model),  [text topic classifcation](#) (from version 0.2.0), and [personal information removal](#) (from version 0.2.0).
 
 Built to support Philippine, Namibia and Ethiopian Red Cross Society.
 
@@ -11,9 +11,9 @@ Credits: [Wessel de Jong](https://github.com/Wessel93), [Phuoc Phung](https://gi
 This repo contains the code to:
 1. Download text data on a specific topic (e.g. COVID-19 vaccines)
 2. Translate it to English
-3. Analyze sentiment (is it positive or negative?)
-4. Divide it into topics
-5. Assign a topic and a representative example to each group
+3. Detect and remove personal information
+4. Analyze sentiment (is it positive or negative?)
+5. Classify text or assign a topic and a representative example to each group
 
 Topic modelling is built on top of [GSDMM: short text clustering](https://github.com/rwalk/gsdmm), while sentiment and translation use [Hugging Face Models](https://huggingface.co/) and/or [Google Cloud Natural Language](https://cloud.google.com/natural-language).
 
