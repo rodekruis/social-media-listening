@@ -75,6 +75,7 @@ Options:
 
 | Pipeline version | Changes |
 | --- | --- |
+| 0.2.0 | Text classification app added <br> Adapted to webapp |
 | 0.1.4 | Lemmatization and stopwords added <br> Function to remove PII added (to external) <br> Fixed translation columns misalignment |
 | 0.1.3 | Added option to save data to DB |
 | 0.1.2 | Corrected generation of link to raw chirps file <br> Fixed misdownloading a processed rainfall from datalake <br> Fixed raw chirps files listing for calculating zonal statistics <br> Minor fixes |

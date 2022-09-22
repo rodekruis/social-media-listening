@@ -351,7 +351,7 @@ def parse_telegram(config):
 
     # remove personally identifiable information
     if config["remove-pii"]:
-        df_messages = remove_pii(df_messages, ['text_post_en', 'text_reply_en'])
+        df_messages = remove_pii(df_messages, ['text_post_en', 'text_reply_en'], config)
 
     # Create combined translated text column to train model on
     if config["classify-text"] or config["analyse-topic"] or config["remove-pii"]:
@@ -362,7 +362,7 @@ def parse_telegram(config):
         )
 
     if config["classify-text"]:
-        df_classified = classify_text(df_messages, 'text_combined_en', sm_code, start_date, end_date, config)
+        df_classified = classify_text(df_messages, 'text_combined_en', config)
         save_data(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}",
                   "telegram",
                   df_classified,

@@ -297,7 +297,7 @@ def translate_string(row_, translate_client, text_field, model):
         return text
 
 
-def remove_pii(df, text_columns):
+def remove_pii(df, text_columns, config):
     """
     remove PII from dataframe
     """
@@ -305,7 +305,7 @@ def remove_pii(df, text_columns):
     logging.info('Removing PII')
     for ix, row in tqdm(df.iterrows(), total=len(df)):
         for text_column in text_columns:
-            url = 'https://anonymization-app.azurewebsites.net/anonymize/'
+            url = config['anonymization-url']
             removePII_done = False
             retry_times = 0
             text_to_anonymize = row[text_column]
@@ -769,8 +769,7 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
     return df_tweets
 
 
-def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config):
-    
+def classify_text(df_tweets, text_column, config):
     
     logging.info('Classifying messages')
 
@@ -810,7 +809,7 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
     df_results = df_results[df_results[text_column].str.len() > 10] # filter short messages
     for idx, row in tqdm(df_results.iterrows(), total=df_results.shape[0]):
         message = row[text_column]
-        result = request_classification(message, labels)
+        result = request_classification(message, labels, config['text-classification-url'])
         for label, score in zip(result['labels'], result['scores']):
             df_results.at[idx, label] = score
 
@@ -850,9 +849,8 @@ def classify_text(df_tweets, text_column, sm_code, start_date, end_date, config)
     return df_classified_text
 
 
-def request_classification(text, labels):
+def request_classification(text, labels, url):
 
-    url = 'http://text-classification.westeurope.cloudapp.azure.com/classify/'
     payload = {
         'text': text,
         'labels': labels,
