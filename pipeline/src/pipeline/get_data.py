@@ -317,12 +317,14 @@ def get_telegram(config, days):
     telegram_secrets = get_secret_keyvault("telegram-secret", config)
     telegram_secrets = json.loads(telegram_secrets)
 
+    time_limit = 60*45 # 45 min
+    time_start = time.time()
     telegram_client = TelegramClient(
-        StringSession(telegram_secrets["session-string"]),#"rou-smm-bot",
+        StringSession(telegram_secrets["session-string"]),
         telegram_secrets["api-id"],
         telegram_secrets["api-hash"]
     )
-    telegram_client.connect()  # start(bot_token=telegram_secrets["bot-token"])
+    telegram_client.connect()
     logging.info("Telegram client connected")
 
     df_messages = pd.DataFrame()
@@ -354,16 +356,23 @@ def get_telegram(config, days):
                         df_messages = df_messages.append(df_replies, ignore_index=True)
                     except Exception as e:
                         logging.info(f"getting replies for {message.id} failed: {e}")
+                    time_duration = time.time() - time_start
+                    if time_duration >= time_limit:
+                        logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
+                        break
+            else:
                 idx = len(df_member_counts)
                 df_member_counts.at[idx, 'source'] = channel
                 member_count = channel_full_info.full_chat.participants_count
                 df_member_counts.at[idx, 'member_count'] = member_count
                 df_member_counts.at[idx, 'date'] = end_date
                 df_member_counts.at[idx, 'message_count'] = len(df_messages[df_messages['source']==channel])
-            logging.info(f"finish telegram channel {channel}, sleep 10 seconds")
-            time.sleep(10)
+                logging.info(f"finish telegram channel {channel}, sleep 10 seconds")
+                time.sleep(10)
+                continue
         except Exception as e:
             logging.error(f"in getting in telegram channel {channel}: {e}")
+            break
 
     telegram_client.disconnect()
     logging.info("Telegram client disconnected")

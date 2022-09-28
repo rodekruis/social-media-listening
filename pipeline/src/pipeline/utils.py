@@ -938,8 +938,7 @@ def read_db(sm_code, start_date, end_date, config):
         """
     try:
         df_messages = pd.read_sql(query, connection)
-        logging.info(f"Succesfully retrieve {sm_code} messages \
-            from {start_date} to {end_date} from table {table_name}")
+        logging.info(f"Succesfully retrieve {len(df_messages)} {sm_code} messages \n from {start_date} to {end_date} from table {table_name}")
     except Exception:
         df_messages = None
         logging.error(f"Failed to retrieve SQL table")
