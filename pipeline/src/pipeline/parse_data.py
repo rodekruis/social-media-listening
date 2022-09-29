@@ -2,6 +2,7 @@ import os
 import ast
 import pandas as pd
 import numpy as np
+import json
 from pipeline.utils import clean_text, translate_dataframe, geolocate_dataframe, \
     filter_by_keywords, get_blob_service_client, html_decode, predict_topic, \
     predict_sentiment, save_data, get_word_frequency, get_daily_messages, \
@@ -307,8 +308,8 @@ def parse_telegram(config):
         for file in keyword_files:
             topic = file.split("_")[0]
             keyword_filepath = f"/config/{file}"
-            download_blob(keyword_filepath, config)
-            df_keywords = pd.read_csv(f"../{keyword_filepath}")
+            download_blob(keyword_filepath, config, f"..{keyword_filepath}")
+            df_keywords = pd.read_csv(f"..{keyword_filepath}")
             keywords = df_keywords.dropna()['keyword'].tolist()
             df_messages = filter_by_keywords(df_messages, ['text_merged'], keywords, topic)
 
@@ -362,7 +363,11 @@ def parse_telegram(config):
         )
 
     if config["classify-text"]:
-        df_classified = classify_text(df_messages, 'text_combined_en', config)
+        if isinstance(os.environ["LABELS"], list):
+            labels = os.environ["LABELS"]
+        else:
+            labels = json.loads(str(os.environ["LABELS"]))
+        df_classified = classify_text(df_messages, 'text_combined_en', labels, config)
         save_data(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}",
                   "telegram",
                   df_classified,
