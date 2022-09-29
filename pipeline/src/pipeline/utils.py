@@ -769,44 +769,14 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
     return df_tweets
 
 
-def classify_text(df_tweets, text_column, config):
+def classify_text(df_tweets, text_column, labels, config, n_examples=100):
     
     logging.info('Classifying messages')
-
-    n_examples = 100
-    n_jobs = 5
-
-    labels = [
-        'army',
-        'asylum or registration',
-        'clothing',
-        'contact',
-        'channels',
-        'online',
-        'education or school',
-        'feedback or sentiment',
-        'food',
-        'health',
-        'people',
-        'information',
-        'language',
-        'location',
-        'movement or travel',
-        'need',
-        'payment or cash',
-        'pets',
-        'question',
-        'shelter or housing',
-        'time',
-        'united nations',
-        'work',
-        'taxes'
-    ]
     
     # score all messages
     df_results = pd.DataFrame(columns=labels)
     df_results[text_column] = df_tweets[text_column]
-    df_results = df_results[df_results[text_column].str.len() > 10] # filter short messages
+    df_results = df_results[df_results[text_column].str.len() > 10]  # filter short messages
     for idx, row in tqdm(df_results.iterrows(), total=df_results.shape[0]):
         message = row[text_column]
         result = request_classification(message, labels, config['text-classification-url'])
@@ -858,16 +828,17 @@ def request_classification(text, labels, url):
     }
     classification_done = False
     retry_times = 0
+    result = None
     while (not classification_done) and (retry_times <= 10):
         try:
             result = requests.post(url, json=payload).json()
             classification_done = True
         except Exception as e:
+            print(f'Error: {e}')
             retry_times += 1
             sleep(10)
     if not classification_done:
-        logging.warning(f"unable to translate {text}: {e}")
-        result = None
+        logging.warning(f"unable to translate {text}")
 
     return result
 
@@ -942,6 +913,9 @@ def read_db(sm_code, start_date, end_date, config):
     except Exception:
         df_messages = None
         logging.error(f"Failed to retrieve SQL table")
+        logging.error(f"{e}")
+        logging.info(f"table_name: {table_name}")
+        logging.info(f"query: {query}")
     finally:
         cursor.close()
         connection.close()
@@ -1058,9 +1032,10 @@ def get_daily_messages(start_date, end_date, telegram_data_path, config):
     return df_messages
 
 
-def download_blob(blob_path, config):
+def download_blob(blob_path, config, local_path=None):
     blob_client = get_blob_service_client(blob_path, config)
-    local_path = blob_path
+    if local_path is None:
+        local_path = blob_path
     with open(local_path, "wb") as download_file:
         download_file.write(blob_client.download_blob().readall())
 
