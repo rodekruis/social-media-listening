@@ -4,7 +4,7 @@ import pandas as pd
 from pipeline.get_data import get_twitter, get_youtube, get_kobo, get_facebook, get_telegram
 from pipeline.parse_data import parse_twitter, parse_youtube, parse_kobo, parse_facebook, parse_azure_table, \
     merge_sources, parse_telegram, prepare_final_dataset
-from pipeline.utils import get_table_service_client
+from pipeline.utils import get_table_service_client, get_blob_service_client
 from azure.data.tables import UpdateMode
 from tqdm import tqdm
 import logging
@@ -42,22 +42,30 @@ def main(config, days, keep):
         datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     )
 
-    # load configuration
-    with open(f"../config/{config}") as file:
-        if config.endswith("json"):
-            config = json.load(file)
-        elif config.endswith("yaml"):
-            config = yaml.load(file, Loader=yaml.FullLoader)
-
     # load credentials
     if all(x in os.environ for x in ["AZURE_CLIENT_ID",
                                      "AZURE_CLIENT_SECRET",
                                      "AZURE_TENANT_ID",
+                                     "KEY_VAULT_URL",
                                      "START_DATE",
                                      "END_DATE"]):
         pass
     else:
         load_dotenv(f"../credentials/.env")
+
+    # load configuration
+    config_dict = {
+        "blobstorage-secret": "config-smm-blobstorage",
+        "keyvault-url": os.environ["KEY_VAULT_URL"]
+    }
+    blob_config = get_blob_service_client(f'{config}', config_dict)
+    with open(f"../config/{config}", "wb") as download_file:
+        download_file.write(blob_config.download_blob().readall())
+    with open(f"../config/{config}") as file:
+        if config.endswith("json"):
+            config = json.load(file)
+        elif config.endswith("yaml"):
+            config = yaml.load(file, Loader=yaml.FullLoader)
 
     data_to_merge = []
 
