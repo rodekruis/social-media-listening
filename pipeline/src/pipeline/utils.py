@@ -909,7 +909,7 @@ def read_db(sm_code, start_date, end_date, config):
         """
     try:
         df_messages = pd.read_sql(query, connection)
-        logging.info(f"Succesfully retrieve {len(df_messages)} {sm_code} messages \n from {start_date} to {end_date} from table {table_name}")
+        logging.info(f"Succesfully retrieved {len(df_messages)} {sm_code} messages \n from {start_date} to {end_date} from table {table_name}")
     except Exception:
         df_messages = None
         logging.error(f"Failed to retrieve SQL table")
@@ -932,45 +932,82 @@ def save_to_db(sm_code, data, config):
         1,
         0
     )
+    data['datetime'] = pd.to_datetime(data['datetime'], format='%Y-%m-%d %H:%M:%S')
 
     data = data.astype(object).where(pd.notnull(data), None)
 
     current_datetime = datetime.datetime.now()
 
-    # Make connection to Azure datbase
-    connection, cursor = connect_to_db(config)
+    # Read data from database to check for duplicates
+    logging.info("Check for duplicates in database")
+    data['in_db'] = False
 
-    try:
-        mySql_insert_query =f"""INSERT INTO {config['azure-database-name']} (id_post, country, sm_code, source, datetime_scraped,\
-         datetime, date, post, text_post, text_reply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+    start_date = min(data['date'])
+    end_date = max(data['date'])
 
-        for idx, row in data.iterrows():
+    data_in_db = read_db(sm_code, start_date, end_date, config)
 
-            cursor.execute(
-                mySql_insert_query,
-                row['id'],
-                config['country-code'],
-                sm_code,
-                row['source'],
-                current_datetime,
-                row['datetime'],
-                row['date'],
-                row['post'],
-                row['text_post'],
-                row['text_reply']
-            )
+    if not data_in_db.empty:
+        # Make sure format of new data and data in database are the same
+        data_in_db.drop(columns=['ID'], inplace=True)
+        data_in_db.rename(columns={'id_post': 'id'}, inplace=True)
+        data_in_db['id'] = pd.to_numeric(data_in_db['id'])
 
-            connection.commit()
+        data_in_db['in_db'] = True
 
-        logging.info(f"Succesfully inserted {len(data)} entries into table 'smm.messages'")
+        # Concatenate new data and data already in database and drop duplicates
+        df_concat = pd.concat([data, data_in_db], ignore_index=True)
+        df_concat.drop_duplicates(
+            subset=['id', 'source', 'datetime', 'text_post', 'text_reply'],
+            keep=False,
+            inplace=True
+        )
 
-    except pyodbc.Error as error:
-        logging.warning("Failed to insert into SQL table {}".format(error))
+        # Remove all rows there were read from database
+        df_concat = df_concat[~df_concat['in_db']]
 
-    finally:
-        cursor.close()
-        connection.close()
-        logging.info("Pyodbc connection is closed")
+        data_final = df_concat.drop(columns=['in_db'])
+    else:
+        data_final = data.drop(columns=['in_db'])
+
+    if not data_final.empty:
+        # Make connection to Azure database
+        connection, cursor = connect_to_db(config)
+
+        try:
+            mySql_insert_query =f"""INSERT INTO {config['azure-database-name']} (id_post, country, sm_code, source, datetime_scraped,\
+             datetime, date, post, text_post, text_reply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+
+            for idx, row in data_final.iterrows():
+
+                cursor.execute(
+                    mySql_insert_query,
+                    row['id'],
+                    config['country-code'],
+                    sm_code,
+                    row['source'],
+                    current_datetime,
+                    row['datetime'],
+                    row['date'],
+                    row['post'],
+                    row['text_post'],
+                    row['text_reply']
+                )
+
+                connection.commit()
+
+            logging.info(f"Succesfully inserted {len(data_final)} entries into table {config['azure-database-name']}, "
+                         f"{len(data) - len(data_final)} duplicates already in database")
+
+        except pyodbc.Error as error:
+            logging.warning("Failed to insert into SQL table {}".format(error))
+
+        finally:
+            cursor.close()
+            connection.close()
+            logging.info("Pyodbc connection is closed")
+    else:
+        logging.info(f"All scraped messages already existing in table {config['azure-database-name']}")
 
 
 def connect_to_db(config):
