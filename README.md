@@ -5,7 +5,7 @@ Featuring: geolocation, translation to English, [sentiment analysis](https://en.
 
 Built to support Philippine, Namibia and Ethiopian Red Cross Society.
 
-Credits: [Phuoc Phung](https://github.com/p-phung), [Jacopo Margutti](https://github.com/jmargutt)
+Credits: [Phuoc Phung](https://github.com/p-phung), [Wessel de Jong](https://github.com/Wessel93), [Jacopo Margutti](https://github.com/jmargutt)
 
 ## Introduction
 This repo contains the code to:
