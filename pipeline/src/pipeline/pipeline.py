@@ -53,20 +53,21 @@ def main(config, days, keep):
     else:
         load_dotenv(f"../credentials/.env")
 
-    # load configuration
-    config_dict = {
-        "blobstorage-secret": "config-smm-blobstorage",
-        "keyvault-url": os.environ["KEY_VAULT_URL"]
-    }
-    blob_config = get_blob_service_client(f'{config}', config_dict)
-    with open(f"../config/{config}", "wb") as download_file:
-        download_file.write(blob_config.download_blob().readall())
+    if not os.path.exists(f"../config/{config}"):
+        # load configuration
+        config_dict = {
+            "blobstorage-secret": "config-smm-blobstorage",
+            "keyvault-url": os.environ["KEY_VAULT_URL"]
+        }
+        blob_config = get_blob_service_client(f'{config}', config_dict)
+        with open(f"../config/{config}", "wb") as download_file:
+            download_file.write(blob_config.download_blob().readall())
+
     with open(f"../config/{config}") as file:
         if config.endswith("json"):
             config = json.load(file)
         elif config.endswith("yaml"):
             config = yaml.load(file, Loader=yaml.FullLoader)
-
     data_to_merge = []
 
     # execute pipeline
@@ -149,17 +150,19 @@ def main(config, days, keep):
             traceback.print_exception(*sys.exc_info())
 
     if config["track-twitter-queries"] or config["track-twitter-users"]:
-        try:
-            get_twitter(config)
-        except Exception as e:
-            logging.error(f"in getting twitter data: {e}")
-            traceback.print_exception(*sys.exc_info())
-        try:
-            data_twitter = parse_twitter(config)
-            data_to_merge.append(data_twitter)
-        except Exception as e:
-            logging.error(f"in parsing twitter data: {e}")
-            traceback.print_exception(*sys.exc_info())
+        if config["get-data"]:
+            try:
+                get_twitter(config)
+            except Exception as e:
+                logging.error(f"in getting twitter data: {e}")
+                traceback.print_exception(*sys.exc_info())
+        if config["parse-data"]:
+            try:
+                data_twitter = parse_twitter(config)
+                data_to_merge.append(data_twitter)
+            except Exception as e:
+                logging.error(f"in parsing twitter data: {e}")
+                traceback.print_exception(*sys.exc_info())
 
     if config["track-youtube-channels"]:
         try:

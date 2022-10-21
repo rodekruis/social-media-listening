@@ -12,14 +12,14 @@ import datetime
 import random
 
 
-def get_retweet(row_):
+def get_retweet(row_, text_column):
     if row_['retweeted']:
         if not pd.isna(row_['retweeted_status']):
-            return row_['retweeted_status']['full_text']
+            return row_['retweeted_status'][text_column]
         else:
-            return row_['full_text']
+            return row_[text_column]
     else:
-        return row_['full_text']
+        return row_[text_column]
 
 
 def get_url_from_entities(entities):
@@ -178,17 +178,17 @@ def parse_twitter(config):
     df_tweets['twitter_url'] = df_tweets.apply(get_url_from_tweet, axis=1)
     df_tweets['url'] = df_tweets['url'].fillna(df_tweets['twitter_url'])
     df_tweets = df_tweets.drop(columns={'entities', 'screen_name', 'twitter_url', 'user', 'extended_entities'})
-    next_text_value = 'full_text'
+    next_text_value = 'text'
 
     # if retweet, get full text of original tweet
-    df_tweets[next_text_value] = df_tweets.apply(get_retweet, axis=1)
+    df_tweets[next_text_value] = df_tweets.apply(get_retweet, args=(next_text_value,), axis=1)
     # clean text
     df_tweets[next_text_value] = df_tweets.apply(clean_text, args=(next_text_value,), axis=1)
 
     # translate tweets
     if config["translate"]:
-        df_tweets = translate_dataframe(df_tweets, next_text_value, 'full_text_en', config)
-        next_text_value = 'full_text_en'
+        df_tweets = translate_dataframe(df_tweets, ['text'], ['text_en'], config)
+        next_text_value = 'text_en'
 
     # filter by keywords
     if config["filter-by-keywords"]:
@@ -226,6 +226,7 @@ def parse_twitter(config):
         if col in df_tweets.columns:
             df_tweets = df_tweets.drop(columns=[col])
 
+    df_tweets["id"] = df_tweets["id"].astype(str)
     save_data("tweets_processed", "twitter", df_tweets, "id", "TW", config)
     return "./twitter/tweets_processed_all.csv"
 
@@ -367,7 +368,7 @@ def parse_telegram(config):
             labels = os.environ["LABELS"]
         else:
             labels = json.loads(str(os.environ["LABELS"]))
-        df_classified = classify_text(df_messages, 'text_combined_en', labels, config)
+        df_messages, df_classified = classify_text(df_messages, 'text_combined_en', labels, config)
         save_data(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}",
                   "telegram",
                   df_classified,
@@ -375,38 +376,13 @@ def parse_telegram(config):
                   sm_code,
                   config)
 
-    # topic analysis
-    if config["analyse-topic"]:
-        # analyse topic RED CROSS and CVA
-        df_messages_1 = df_messages[
-            (df_messages["rcrc"]) &
-            (df_messages["cva"])
-            ]
-        df_messages_1 = predict_topic(df_messages_1, 'text_combined_en', sm_code, start_date, end_date, config, "cva")
-        # analyse topic RED CROSS and not CVA
-        df_messages_2 = df_messages[(df_messages["rcrc"]) & (~df_messages["cva"])]
-        df_messages_2 = predict_topic(df_messages_2, 'text_combined_en', sm_code, start_date, end_date, config, "rcrc")
-        # merge all into one single df
-        df_messages_topics = df_messages_1.append(df_messages_2, ignore_index=True)
-
-        # Drop combined translated text column
-        df_messages_topics = df_messages_topics.drop(columns=['text_combined_en'])
-        df_messages = df_messages.drop(columns=['text_combined_en'])
-
-        # assign topics to messages that were not clustered
-        df_messages.drop(df_messages[df_messages['rcrc']].index, inplace=True)
-
-        df_messages['topic'] = ""
-        df_messages = df_messages.append(df_messages_topics, ignore_index=True)
-        df_messages.drop(df_messages[(df_messages['rcrc']) & (df_messages['topic'] == "")].index, inplace=True)
-
-    if config["analyse-topic"] or config["remove-pii"]:
-        save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
-                "telegram",
-                df_messages,
-                "id",
-                sm_code,
-                config)
+    # save processed data
+    save_data(f"{config['country-code']}_{sm_code}_messagesprocessed_{start_date}_{end_date}",
+            "telegram",
+            df_messages,
+            "id",
+            sm_code,
+            config)
 
     return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"
 

@@ -26,11 +26,16 @@ def get_twitter(config):
     logging.info('getting twitter data')
 
     # initialize twitter API
-    twitter_secrets = get_secret_keyvault("twitter-secret", config)
-    twitter_secrets = json.loads(twitter_secrets)
-    auth = tweepy.OAuthHandler(twitter_secrets['CONSUMER_KEY'], twitter_secrets['CONSUMER_SECRET'])
-    auth.set_access_token(twitter_secrets['ACCESS_TOKEN'], twitter_secrets['ACCESS_SECRET'])
-    api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True, compression=True)
+    twitter_secrets = {}
+    if len(config["keyvault-url"]) > 0:
+        twitter_secrets = get_secret_keyvault("twitter-secret", config)
+        twitter_secrets = json.loads(twitter_secrets)
+    else:
+        for secret in ['TWITTER_API_KEY', 'TWITTER_API_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET']:
+            twitter_secrets[secret] = os.getenv(secret)
+    auth = tweepy.OAuthHandler(twitter_secrets['TWITTER_API_KEY'], twitter_secrets['TWITTER_API_SECRET'])
+    auth.set_access_token(twitter_secrets['TWITTER_ACCESS_TOKEN'], twitter_secrets['TWITTER_ACCESS_SECRET'])
+    api = tweepy.API(auth, wait_on_rate_limit=True)
 
     twitter_data_path = "./twitter"
     os.makedirs(twitter_data_path, exist_ok=True)
@@ -86,25 +91,21 @@ def get_twitter(config):
         all_tweets = []
         # loop over queries and search
         for query in queries:
-            n = 0
             try:
-                for page in tweepy.Cursor(api.search,
+                for page in tweepy.Cursor(api.search_tweets,
                                           q=query,
-                                          tweet_mode='extended',
+                                          geocode="39.822197,34.808097,800km",
+                                          lang="tr",
                                           include_entities=True,
-                                          max_results=100).pages():
-                    # logging.info('processing page {0}'.format(n))
+                                          count=100).pages():
                     try:
                         for tweet in page:
                             all_tweets.append(tweet)
                     except Exception as e:
-                        logging.warning("Some error occurred, skipping page {0}:".format(n))
-                        logging.warning(e)
+                        logging.warning(f"Error {e}, skipping page {n}")
                         pass
-                    n += 1
             except Exception as e:
-                logging.warning("Some error occurred, skipping query {0}:".format(query))
-                logging.warning(e)
+                logging.warning(f"Error {e}, skipping page {n}")
                 pass
 
         with open(save_file, 'a') as tf:
@@ -113,10 +114,8 @@ def get_twitter(config):
                     tf.write('\n')
                     json.dump(tweet._json, tf)
                 except Exception as e:
-                    logging.warning("Some error occurred, skipping tweet:")
-                    logging.warning(e)
+                    logging.warning(f"Error {e}, skipping tweet")
                     pass
-
 
     # parse tweets and store in dataframe
     df_tweets = pd.DataFrame()
@@ -124,6 +123,7 @@ def get_twitter(config):
         if file.endswith('.json'):
             df_tweets_ = pd.read_json(os.path.join(twitter_data_path, file), lines=True)
             df_tweets = df_tweets.append(df_tweets_, ignore_index=True)
+
     # drop duplicates
     df_tweets = df_tweets.drop_duplicates(subset=['id'])
 

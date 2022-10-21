@@ -344,8 +344,11 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
         model_tag = model.replace("HuggingFace:", "")
         translate_client = transformers.pipeline("translation", model=model_tag)
     elif model == 'Microsoft':
-        subcription_info = get_secret_keyvault('mscognitive-secret', config)
-        subcription_info = json.loads(subcription_info)
+        if not os.getenv("MSCOGNITIVE_KEY"):
+            subcription_info = get_secret_keyvault('mscognitive-secret', config)
+            subcription_info = json.loads(subcription_info)
+        else:
+            subcription_info = {"subscription_key": os.getenv("MSCOGNITIVE_KEY"), "location": "westeurope"}
         constructed_url = config['mscognitive-url']
 
         params = {
@@ -782,13 +785,18 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100):
         result = request_classification(message, labels, config['text-classification-url'])
         for label, score in zip(result['labels'], result['scores']):
             df_results.at[idx, label] = score
+            df_tweets.at[idx, f'{label}_score'] = score  # copy scores back into original dataframe
 
     # select messages with highest scores per label
     df_classified_text = pd.DataFrame()
     for label in labels:
-        df_tmp = df_results[[text_column, label]]
+        df_tmp = df_results[[text_column, label]].copy()
         df_tmp.sort_values(by=label, ascending=False, inplace=True)
-        df_tmp = df_tmp.head(n_examples)
+        df_tmp = df_tmp.head(n_examples)  # get top N scores
+
+        df_tweets.at[df_tweets.index.isin(df_tmp.index), label] = True  # set top N as True into original dataframe
+        df_tweets.at[~df_tweets.index.isin(df_tmp.index), label] = False  # set all other as False
+
         df_tmp.reset_index(drop=True, inplace=True)
         df_classified_text.reset_index(drop=True, inplace=True)
         df_classified_text = pd.concat(
@@ -796,9 +804,17 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100):
                 df_classified_text,
                 df_tmp
             ],
-            # keys= [f"{label} - text", f"{label} - score",],
             axis=1
         )
+
+    # reorder columns, putting scores at the end
+    cols = df_tweets.columns
+    scores = [f'{label}_score' for label in labels]
+    cols_min_topics = [c for c in cols if c not in scores]
+    cols_min_topics = [c for c in cols_min_topics if c not in labels]
+    cols_min_topics = [c for c in cols_min_topics if c not in ['rcrc', 'cva']]
+    df_tweets = df_tweets[cols_min_topics + ['rcrc', 'cva'] + labels + scores]
+
     # create label "other" with the sum of all scores
     # rationale: messages with LOWEST total score are the least well classified and thus potentially interesting
     df_results['sum_scores'] = df_results[labels].sum(axis=1)
@@ -809,14 +825,14 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100):
         scores.reset_index(drop=True)], axis=1)
     df_other.rename(columns={'sum_scores': 'other'}, inplace=True)
     df_classified_text = pd.concat(
-    [
-        df_classified_text,
-        df_other
-    ],
-    axis=1
+        [
+            df_classified_text,
+            df_other
+        ],
+        axis=1
     )
 
-    return df_classified_text
+    return df_tweets, df_classified_text
 
 
 def request_classification(text, labels, url):
@@ -862,11 +878,13 @@ def save_data(name, directory, data, id, sm_code, config):
             blob_client.upload_blob(upload_file, overwrite=True)
 
     # append to existing twitter dataframe
-    final_table_columns = ["index", "source", "member_count", "message_count", \
-        "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
-    data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)
-    if containsNumber(name):
-        name = "_".join(name.split('_')[0:3])
+    if "rcrc" in data.columns:
+        final_table_columns = ["index", "source", "member_count", "message_count", \
+            "text", "datetime", "id", "date", "rcrc", "cva", "full_text_en"]
+        data.drop(columns=[col for col in data if col not in final_table_columns], inplace=True)
+        if containsNumber(name):
+            name = "_".join(name.split('_')[0:3])
+
     data_all_path = f"./{directory}/{name}_all.csv"
     try:
         if not config["skip-datalake"]:
