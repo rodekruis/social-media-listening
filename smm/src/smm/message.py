@@ -10,6 +10,7 @@ class Message:
                  id_,
                  datetime_,
                  source,  # social media source (twitter, telegram..)
+                 text,
                  group=None,  # group, channel, page, account, etc.
                  reply=False,
                  reply_to=None,
@@ -22,6 +23,7 @@ class Message:
         else:
             self.datetime_ = pd.to_datetime(datetime_)
         self.source = source
+        self.text = text
         self.group = group
         self.reply = reply
         self.reply_to = reply_to
