@@ -11,6 +11,7 @@ class Message:
                  datetime_,
                  source,  # social media source (twitter, telegram..)
                  group=None,  # group, channel, page, account, etc.
+                 text=None,
                  reply=False,
                  reply_to=None,
                  translation=None,
@@ -23,6 +24,7 @@ class Message:
             self.datetime_ = pd.to_datetime(datetime_)
         self.source = source
         self.group = group
+        self.text = text
         self.reply = reply
         self.reply_to = reply_to
         if translation is None:
@@ -48,4 +50,18 @@ class Message:
     def set_classification(self, dict_):
         # TBI check that dict_ follow structure
         # [{"class": "...", "score": "..."}, ...]
+
+    def to_dict(self):
+        return {
+            'id' : self.id_,
+            'datetime' : self.datetime_,
+            'source' : self.source,
+            'group' : self.group,
+            'text' : self.text,
+            'reply' : self.reply,
+            'reply_to' : self.reply_to,
+            'translation' : self.translation,
+            'info' : self.info,
+            'classification' : self.classification
+        }
 
