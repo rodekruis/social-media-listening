@@ -12,11 +12,11 @@ class Message:
                  source,  # social media source (twitter, telegram..)
                  text,
                  group=None,  # group, channel, page, account, etc.
-                 text=None,
                  reply=False,
+                 reply_text=None,
                  reply_to=None,
                  translation=None,
-                 info=None,
+                 info=None, # country, etc.
                  classification=None):
         self.id_ = id_
         if isinstance(datetime_, datetime):
