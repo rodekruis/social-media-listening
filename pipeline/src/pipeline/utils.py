@@ -950,8 +950,10 @@ def save_to_db(sm_code, data, config):
         1,
         0
     )
-    data['datetime'] = pd.to_datetime(data['datetime'], format='%Y-%m-%d %H:%M:%S')
 
+    data['datetime'] = pd.to_datetime(data['datetime'], format='%Y-%m-%d %H:%M:%S')
+    data['datetime'] = data['datetime'].dt.tz_localize(None)
+    data["id_post"] = data["id_post"].astype("int64")
     data = data.astype(object).where(pd.notnull(data), None)
 
     current_datetime = datetime.datetime.now()
@@ -968,15 +970,18 @@ def save_to_db(sm_code, data, config):
     if not data_in_db.empty:
         # Make sure format of new data and data in database are the same
         data_in_db.drop(columns=['ID'], inplace=True)
-        data_in_db.rename(columns={'id_post': 'id'}, inplace=True)
-        data_in_db['id'] = pd.to_numeric(data_in_db['id'])
+
+        data_in_db["datetime"] = pd.to_datetime(data_in_db["datetime"], format='%Y-%m-%d %H:%M:%S')
+        data_in_db["id_post"] = data_in_db["id_post"].astype("int64")
+
+        data_in_db = data_in_db.astype(object).where(pd.notnull(data_in_db), None)
 
         data_in_db['in_db'] = True
 
         # Concatenate new data and data already in database and drop duplicates
         df_concat = pd.concat([data, data_in_db], ignore_index=True)
         df_concat.drop_duplicates(
-            subset=['id', 'source', 'datetime', 'text_post', 'text_reply'],
+            subset=['id_post', 'source', 'datetime', 'text_post', 'text_reply'],
             keep=False,
             inplace=True
         )
@@ -1000,7 +1005,7 @@ def save_to_db(sm_code, data, config):
 
                 cursor.execute(
                     mySql_insert_query,
-                    row['id'],
+                    row['id_post'],
                     config['country-code'],
                     sm_code,
                     row['source'],
