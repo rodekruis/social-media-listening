@@ -25,10 +25,5 @@ setuptools.setup(
             "black",
             "flake8"
         ],
-    },
-    entry_points={
-        'console_scripts': [
-            f"run-pipeline = {PROJECT_NAME}.pipeline:main",
-        ]
     }
 )
