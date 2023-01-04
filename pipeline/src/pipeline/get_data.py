@@ -307,6 +307,7 @@ def get_telegram(config, days):
 
     # load channel links
     blob_client = get_blob_service_client(config["telegram-channels-file"], config)
+    os.makedirs(os.path.dirname(config["telegram-channels-file"]), exist_ok=True)
     with open(config["telegram-channels-file"], "wb") as download_file:
         download_file.write(blob_client.download_blob().readall())
     with open(config["telegram-channels-file"], "r") as file:
