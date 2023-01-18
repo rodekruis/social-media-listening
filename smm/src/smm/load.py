@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 import pandas as pd
 import os
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+
 supported_storages = ["local", "Azure SQL Database", "Azure Blob Storage"]
 
 
@@ -141,7 +144,12 @@ class Load:
         return df
 
 
-    def get_secret_keyvault(secret_name, config):
+    def get_secret_keyvault(self, secret_name):
+        az_credential = DefaultAzureCredential()
+        kv_secretClient = SecretClient(vault_url=self.key_vault, 
+                                        credential=az_credential)
+        secret_value = kv_secretClient.get_secret(secret_name).value
+        return secret_value
 
     def get_blob_service_client(blob_path, config):
 
