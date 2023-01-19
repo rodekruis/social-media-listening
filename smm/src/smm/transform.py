@@ -136,6 +136,25 @@ class Transform:
                     logging.error(e)
                     sleep(10)
 
+        elif self.translator_name == "Custom":
+            payload = {
+                "text": text,
+                "from_lang": self.from_lang,
+                "to_lang": self.to_lang,
+            }
+            for retry in range(10):
+                try:
+                    response = requests.post(self.translator, json=payload).json()
+                    translation_data = {
+                        "text": response["translation_text"],
+                        "from_lang": self.from_lang,
+                        "to_lang": self.to_lang,
+                    }
+                    break
+                except Exception as e:
+                    logging.error(e)
+                    sleep(10)
+
         if translation_data['text'] == text:
             logging.warning("Translator returned identical message, check configuration.")
         return translation_data
@@ -247,12 +266,15 @@ class Transform:
         else:
             self.anonymizer_name = name
 
-        if self.anonymizer_name != "anonymization-app":
+        if self.anonymizer_name == "anonymization-app":
+            self.anonymizer = "https://anonymization-app.azurewebsites.net/anonymize/"
+
+        else:
             raise ValueError(f"Anonymizer {name} is not supported. "
                              f"Supported anonymizers are {supported_anonymizers}")
 
     def anonymize(self, text):
-        if self.classifier_name is None:
+        if self.anonymizer_name is None:
             raise RuntimeError("Anonymizer not initialized, use set_anonymizer()")
         anonymized_text = text
         for retry in range(10):
@@ -290,9 +312,16 @@ class Transform:
             # TBI geolocate messages
             pass
         if anonymize:
-            logging.info('Anonymizing messages')
+            if translate:
+                logging.info('Anonymizing translated messages')
+            else:
+                logging.info('Anonymizing messages')
             for idx, message in enumerate(messages):
-                messages[idx].text = self.anonymize(message.text)
+                if translate:
+                    for idxt, translation in enumerate(messages[idx].translations):
+                        messages[idx].translations[idxt]['text'] = self.anonymize(message.translations[idxt]['text'])
+                else:
+                    messages[idx].text = self.anonymize(message.text)
 
         return messages
 
@@ -303,7 +332,7 @@ class Transform:
             raise ValueError(f"Original language must be specified for word frequencies")
         if lemmatizer_model is None:
             # try to get the standard spaCy model "{lang}_core_news_sm"
-            spacy_model_name = f"{self.wordfreq_lang}_core_news_sm"
+            spacy_model_name = f"{self.wordfreq_lang}_core_web_sm"
             if not spacy.util.is_package(spacy_model_name):
                 try:
                     spacy.cli.download(spacy_model_name)
@@ -325,6 +354,7 @@ class Transform:
     def get_wordfreq(self, messages):
         if self.lemmatizer is None:
             raise RuntimeError("Lemmatizer not initialized for word frequencies, use set_wordfreq()")
+        logging.info('Calculating word frequencies')
 
         text = ''
         for idx, message in enumerate(messages):
