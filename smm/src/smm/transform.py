@@ -11,8 +11,8 @@ import json
 import requests
 import uuid
 import spacy
-supported_translators = ["HuggingFace", "Google", "Microsoft"]
-supported_classifiers = ["HuggingFace", "URL"]
+supported_translators = ["HuggingFace", "Google", "Microsoft", "Custom"]
+supported_classifiers = ["HuggingFace", "Custom"]
 supported_anonymizers = ["anonymization-app"]
 supported_classifier_tasks = ["sentiment-analysis", "zero-shot-classification"]
 
@@ -84,6 +84,9 @@ class Transform:
             self.translator = google_translate.Client(credentials=credentials)
             self.translator_secrets = secrets
 
+        elif self.translator_name == "Custom":
+            self.translator = secrets["TRANSLATOR_API_URL"]
+
         else:
             raise ValueError(f"Translator {name} is not supported. "
                              f"Supported translators are {supported_translators}")
@@ -114,6 +117,7 @@ class Transform:
                         "from_lang": self.from_lang,
                         "to_lang": self.to_lang,
                     }
+                    break
                 except Exception as e:
                     logging.error(e)
                     sleep(10)
@@ -127,6 +131,7 @@ class Transform:
                         "from_lang": self.from_lang,
                         "to_lang": self.to_lang,
                     }
+                    break
                 except Exception as e:
                     logging.error(e)
                     sleep(10)
@@ -177,16 +182,16 @@ class Transform:
                 raise ValueError(f"Classifier task {task} is not supported. "
                                  f"Supported classifier tasks are {supported_classifier_tasks}")
 
-        elif self.translator_name == "URL":
+        elif self.classifier_name == "Custom":
             if self.classifier_task in supported_classifier_tasks:
-                self.classifier = secrets["CLASSIFIER_URL"]
+                self.classifier = secrets["CLASSIFIER_API_URL"]
             else:
                 raise ValueError(f"Classifier task {task} is not supported. "
                                  f"Supported classifier tasks are {supported_classifier_tasks}")
 
         else:
             raise ValueError(f"Classifier {name} is not supported. "
-                             f"Supported classifiers are {supported_translators}")
+                             f"Supported classifiers are {supported_classifiers}")
 
     def classify_text(self, text):
         if self.classifier_name is None:
@@ -205,7 +210,7 @@ class Transform:
                 for label, score in zip(result['labels'], result['scores']):
                     classification_data.append({'class': label, 'score': score})
 
-        elif self.translator_name == "URL":
+        elif self.classifier_name == "Custom":
             payload = {'text': text}
             if self.classifier_task != "sentiment-analysis":
                 payload['labels'] = self.class_labels
@@ -215,6 +220,7 @@ class Transform:
                     result = requests.post(self.classifier, json=payload).json()
                     for label, score in zip(result['labels'], result['scores']):
                         classification_data.append({'class': label, 'score': score})
+                    break
                 except Exception as e:
                     logging.error(e)
                     sleep(10)
@@ -227,7 +233,7 @@ class Transform:
         try:
             text = next(x['text'] for x in message.translations if x['to_lang'] == self.classifier_lang)
         except StopIteration:
-            logging.warning(f"Classifier language is {self.classifier_lang}, no specific translations found. "
+            logging.warning(f"Classifier language is {self.classifier_lang}, no translation found in message. "
                             "Classifying on original language.")
             text = message.text
         classification = self.classify_text(text)
@@ -255,6 +261,7 @@ class Transform:
                 response = request.json()
                 if 'anonymized_text' in response.keys():
                     anonymized_text = response['anonymized_text']
+                break
             except Exception as e:
                 logging.error(e)
                 sleep(10)
@@ -302,7 +309,7 @@ class Transform:
                     spacy.cli.download(spacy_model_name)
                 except:
                     # model not found
-                    raise ValueError(f"spaCy model {spacy_model_name} not found, "
+                    raise ValueError(f"spaCy model {spacy_model_name} for word frequencies not found, "
                                      "please specify it as lemmatizer_model=...")
         else:
             # if model name is specified, use that one
@@ -317,7 +324,7 @@ class Transform:
 
     def get_wordfreq(self, messages):
         if self.lemmatizer is None:
-            raise RuntimeError("Lemmatizer not initialized, use set_wordfreq()")
+            raise RuntimeError("Lemmatizer not initialized for word frequencies, use set_wordfreq()")
 
         text = ''
         for idx, message in enumerate(messages):
