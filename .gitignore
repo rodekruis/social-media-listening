@@ -4,20 +4,16 @@
 *.sublime-project
 *.sublime-workspace
 
-
 # Configuration, secrets, etc:
 .env
 env
-
 
 # Generated files
 dist
 coverage
 
-
 # External code
 node_modules
-
 
 # Logs / Cache / temporary files
 logs
@@ -32,3 +28,24 @@ credentials/*
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
