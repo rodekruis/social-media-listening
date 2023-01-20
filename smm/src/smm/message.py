@@ -28,6 +28,7 @@ class Message:
         self.group = group
         self.text = text
         self.reply = reply
+        self.reply_text = reply_text
         self.reply_to = reply_to
         if translations is None:
             self.translations = []

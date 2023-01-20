@@ -45,22 +45,24 @@ class SocialMediaSecrets:
 
 
     def get_secret_env(self):
-        sm_secrets = dotenv_values(f"../credentials/env")
+        secret_file = "../credentials/env" # TODO: where to input the file directory
+        sm_secrets = dotenv_values(secret_file)
         return sm_secrets
 
 
     def get_secret_file(self):
-        secret_file_dir = f"../credentials/secrets.json"
-        with open(secret_file_dir, "r") as secret_file:
-            if secret_file_dir.endswith("json"):
+        secret_file = "../credentials/secrets.json"
+        with open(secret_file, "r") as secret_file:
+            if secret_file.endswith("json"):
                 sm_secrets = json.load(secret_file) #TODO: set constraints of json file format?
-            elif secret_file_dir.endswith("yaml"):
+            elif secret_file.endswith("yaml"):
                 sm_secrets = yaml.load(secret_file, Loader=yaml.FullLoader)
             return sm_secrets
 
 
     def get_secret_azure(self):
-        sm_secrets = self.load.get_secret_keyvault(self.source)
+        secret_name_az = ""
+        sm_secrets = self.load.get_secret_keyvault(secret_name_az)
         sm_secrets = json.loads(sm_secrets)
         return sm_secrets
 
