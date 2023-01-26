@@ -13,7 +13,6 @@ class Message:
                  text,
                  group=None,  # group, channel, page, account, etc.
                  reply=False,
-                 reply_text=None,
                  reply_to=None,
                  translations=None,
                  info=None,  # country, etc.
@@ -28,7 +27,6 @@ class Message:
         self.group = group
         self.text = text
         self.reply = reply
-        self.reply_text = reply_text
         self.reply_to = reply_to
         if translations is None:
             self.translations = []
@@ -38,12 +36,35 @@ class Message:
             self.classifications = []
 
     def from_twitter(self, dict_):
-        # TBI automatically map from tweet
-        pass
+        self.id = dict_.id
+        self.datetime_ = dict_.created_at
+        self.source = "twitter"
+        self.group = None
+        self.text = dict_.full_text
+        self.reply_to = dict_.in_reply_to_status_id
+        if self.reply_to:
+            self.reply = True
+        else:
+            self.reply = False
+        self.translations = None
+        self.info = {}
+        self.classifications = []
 
     def from_telegram(self, dict_):
-        # TBI automatically map from telegram
-        pass
+        self.id = dict_.id
+        self.datetime_ = dict_.date
+        self.source = "telegram"
+        self.group = dict_.PeerChannel.channel_id # TODO: verify
+        self.text = dict_.message
+        if dict_.post:
+            self.reply = False
+            self.reply_to = None
+        else:
+            self.reply = True
+            self.reply_to = dict_.MessageReplyHeader.reply_to_msg_id # TODO: verify 
+        self.translations = []
+        self.info = {}
+        self.classifications = []
 
     def from_kobo(self, dict_):
         # TBI automatically map from telegram
