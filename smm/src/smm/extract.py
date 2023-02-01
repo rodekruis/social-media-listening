@@ -152,7 +152,8 @@ class Extract:
                  queries=None,
                  users=None,
                  channels=None,
-                 pages=None):
+                 pages=None,
+                 store_temp=True):
         
         self.start_date = start_date
         self.end_date = end_date
@@ -160,20 +161,18 @@ class Extract:
         self.users = users
         self.channels = channels
         self.pages = pages
+        self.store_temp = store_temp
 
         if not self.source.check_secrets():
             raise ValueError("no social media secrets found")
 
         if self.source.name == "twitter":
-            # TBI get data from Twitter
             logging.info('Getting Twitter data')
             messages = self.get_data_twitter()
         elif self.source.name == "kobo":
-            # TBI get data from Twitter
             logging.info('Getting Kobo data')
             messages = self.get_data_kobo()
         elif self.source.name == "telegram":
-            # TBI get data from Telegram
             logging.info('Getting Telegram data')
             messages = self.get_data_telegram()
         else:
@@ -184,15 +183,13 @@ class Extract:
 
 
     def get_data_twitter(self):
-        # initialize twitter API
-        twitter_secrets = self.source.secrets.copy()
         auth = tweepy.OAuthHandler(
-            twitter_secrets['API_CONSUMER_KEY'], 
-            twitter_secrets['API_CONSUMER_SECRET']
+            self.source.secrets['API_CONSUMER_KEY'], 
+            self.source.secrets['API_CONSUMER_SECRET']
             )
         auth.set_access_token(
-            twitter_secrets['API_ACCESS_TOKEN'], 
-            twitter_secrets['API_ACCESS_SECRET']
+            self.source.secrets['API_ACCESS_TOKEN'], 
+            self.source.secrets['API_ACCESS_SECRET']
             )
         api = tweepy.API(auth, wait_on_rate_limit=True)
         all_messages = []
@@ -223,10 +220,10 @@ class Extract:
                         break
                     oldest_id = tweets[-1].id
                     all_tweets.extend(tweets)
+                # map all raw tweets to messages
                 for tweet in all_tweets:
                     message = Message.from_twitter(tweet)
                     all_messages.append(message)
-                # df_tweets = pd.json_normalize(all_tweets)
 
         # track specific queries
         if not self.queries:
@@ -251,47 +248,54 @@ class Extract:
                 except Exception as e:
                     logging.warning(f"Error {e}, skipping page {n}")
                     pass
-            
-        #     if 'df_tweets' in locals():
-        #         df_tweets_queries = pd.json_normalize(all_tweets)
-        #         df_tweets = df_tweets.append(df_tweets_queries, ignore_index=True)
-        #     else:
-        #         df_tweets = pd.json_normalize(all_tweets)
         
         # drop duplicates
-        # df_tweets = df_tweets.drop_duplicates(subset=['id'])
-        all_messages = list(dict.fromkeys(all_messages))
+        df_messages = pd.DataFrame(all_messages)
+        df_messages = df_messages.drop_duplicates(subset=['id'])
+        all_messages = df_messages.to_dict("records")
+
+        # save temp
+        if self.store_temp:
+            self._save_temp(df_messages, 'tweets')
+
         return all_messages
 
 
     def get_data_kobo(self):
-        kobo_secrets = self.source.secrets.copy()
-        url = f'https://kobonew.ifrc.org/api/v2/assets/{kobo_secrets["asset"]}/data.json'
-        headers = {'Authorization': f'Token {kobo_secrets["token"]}'}
+        url = f'https://kobonew.ifrc.org/api/v2/assets/{self.source.secrets["ASSET"]}/data.json'
+        headers = {'Authorization': f'Token {self.source.secrets["TOKEN"]}'}
         data_request = requests.get(url,
                                     headers=headers)
         data = data_request.json()['results']
         df_form = pd.DataFrame(data)
-        # TODO: update mapping df to list of dict
-        return df_form
+
+        all_messages = []
+        for idx, row in df_form.iterrows():
+            # TBI: update mapping df to list of dict
+            message = Message.from_kobo(row)
+            all_messages.append(message)
+
+        # save temp
+        if self.store_temp:
+            self._save_temp(df_form, 'form')
+
+        return all_messages
 
 
     def get_data_telegram(self):
-        telegram_secrets = self.source.secrets.copy()
-
         # Set timmer to avoid scraping for too long
         time_limit = 60*45 # 45 min
         time_start = time.time()
         telegram_client = TelegramClient(
-            StringSession(telegram_secrets["SESSION_STRING"]),
-            telegram_secrets["API_ID"],
-            telegram_secrets["API_HASH"]
+            StringSession(self.source.secrets["SESSION_STRING"]),
+            self.source.secrets["API_ID"],
+            self.source.secrets["API_HASH"]
         )
         telegram_client.connect()
-        
         all_messages = []
         df_messages = pd.DataFrame()
-        df_member_counts = pd.DataFrame()
+        df_counts = pd.DataFrame()
+        
         for channel in self.channels:
             logging.info(f"Getting in Telegram channel {channel}")
             try:
@@ -299,7 +303,8 @@ class Extract:
                 channel_full_info = telegram_client(
                     GetFullChannelRequest(channel=channel_entity)
                     )
-
+                # scrape posts
+                replied_post_id = []
                 for raw_message in telegram_client.iter_messages(
                     channel_entity,
                     offset_date = self.end_date,
@@ -309,43 +314,49 @@ class Extract:
                     reply = None
                     message = Message.from_telegram(message)
                     all_messages.append(message)
-                    # df_messages = self._arrange_telegram_messages(df_messages, raw_message, reply, channel)
                     if channel_entity.broadcast and raw_message.post and raw_message.replies:
-                        df_replies = pd.DataFrame()
-                        try:
-                            # TODO: split reply scraping loop outside of this loop
-                            for raw_reply in telegram_client.iter_messages(
-                                channel_entity,
-                                reply_to=raw_message.id,
-                                wait_time = 5
-                            ):
-                                reply = Message.from_telegram(raw_reply)
-                                all_messages.append(reply)
-                                # df_replies = self._arrange_telegram_messages(df_replies, raw_message, raw_reply, channel)
-                                time.sleep(5)
-                            # df_messages = df_messages.append(df_replies, ignore_index=True)
-                        except Exception as e:
-                            logging.warning(f"Skipping replies for {raw_message.id}: {e}")
-                        time_duration = time.time() - time_start
-                        if time_duration >= time_limit:
-                            logging.warning(f"Getting replies for {channel} stopped: timeout {time_duration} seconds")
-                            break
+                        replied_post_id.append(raw_message.id)
+                
+                # scrape replies
+                for post_id in replied_post_id:
+                    try:
+                        for raw_reply in telegram_client.iter_messages(
+                            channel_entity,
+                            offset_date = self.end_date,
+                            reverse = True,
+                            reply_to = post_id,
+                            wait_time = 5
+                        ):
+                            reply = Message.from_telegram(raw_reply)
+                            all_messages.append(reply)
+                            time.sleep(5)
+                    except Exception as e:
+                        logging.info(f"Skipping replies for {raw_message.id}: {e}")
+
+                    time_duration = time.time() - time_start
+                    if time_duration >= time_limit:
+                        logging.warning(f"Getting replies for {channel} stopped: timeout {time_duration} seconds")
+                        break
                 else:
-                    # df_member_counts = self._count_messages(df_member_counts, df_messages, channel_full_info)
                     time.sleep(10)
                     continue
+                df_counts = self._count_messages(df_counts, df_messages, channel_full_info)
             except Exception as e:
                 logging.warning(f"Failed getting in Telegram channel {channel}: {e}")
                 break
 
         telegram_client.disconnect()
 
-        # # Add index column
-        # df_member_counts.reset_index(inplace=True)
-        # df_member_counts['id'] = df_member_counts.index
-        # df_messages.reset_index(inplace=True)
-        # df_messages['id'] = df_messages.index
-        # df_messages['datetime'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
+        # drop duplicates
+        df_messages = pd.DataFrame(all_messages).reset_index(inplace=True)
+        df_messages['datetime'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
+        df_messages = df_messages.drop_duplicates(subset=['id'])
+        all_messages = df_messages.to_dict("records")
+
+        # save temp
+        if self.store_temp:
+            self._save_temp(df_messages, 'messages')
+            self._save_temp(df_counts, 'counts')
 
         return all_messages
 
@@ -378,3 +389,10 @@ class Extract:
         df_count.at[idx, 'date'] = self.start_date
         df_count.at[idx, 'message_count'] = len(df_messages[df_messages['source']==self.source])
         return df_count
+
+    def _save_temp(self, df, dataname):
+        # save temp
+        if not os.path.exists('./temp'):
+            os.mkdir('./temp')
+        filename = f'./temp/{self.source}_{dataname}_{self.end_date}_{self.start_date}.csv'
+        df.to_csv(filename, index=False)
