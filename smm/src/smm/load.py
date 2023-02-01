@@ -24,7 +24,36 @@ class StorageSecrets:
 
         self.keyvault_url = keyvault_url
         self.database_secret = database_secret
-        # TBI automatically get secrets from environment variables (?)
+        #TODO: automatically get secrets from environment variables (?)
+
+        def get_secret(self):
+            if self.secret_location == "env":
+                sm_secrets = self.get_secret_env()
+            if self.secret_location == "file":
+                sm_secrets = self.get_secret_file()
+            if self.secret_location == "azure":
+                sm_secrets = self.get_secret_azure()
+            return sm_secrets
+
+        def get_secret_env(self):
+            secret_file = "../credentials/env"  # TODO: where to input the file directory
+            sm_secrets = dotenv_values(secret_file)
+            return sm_secrets
+
+        def get_secret_file(self):
+            secret_file = "../credentials/secrets.json"
+            with open(secret_file, "r") as secret_file:
+                if secret_file.endswith("json"):
+                    sm_secrets = json.load(secret_file)  # TODO: set constraints of json file format?
+                elif secret_file.endswith("yaml"):
+                    sm_secrets = yaml.load(secret_file, Loader=yaml.FullLoader)
+                return sm_secrets
+
+        def get_secret_azure(self):
+            secret_name_az = ""
+            sm_secrets = self.load.get_secret_keyvault(secret_name_az)
+            sm_secrets = json.loads(sm_secrets)
+            return sm_secrets
 
 
 class Storage:
@@ -34,20 +63,22 @@ class Storage:
     def __init__(self, name=None, secrets=None):
         if name is None:
             self.name = "local"
-        elif name not in supported_storages:
-            raise ValueError(f"storage {name} is not supported."
+        if name not in supported_storages:
+            raise ValueError(f"Storage {name} is not supported."
                              f"Supported storages are {supported_storages}")
         else:
             self.name = name
-        self.secrets = secrets
+        self.secrets = self.set_secrets(secrets)
 
     def set_secrets(self, secrets):
         if not isinstance(secrets, StorageSecrets):
-            raise TypeError(f"invalid format of secrets, use extract.SMSecrets")
-        self.secrets = secrets
+            raise TypeError(f"invalid format of secrets, use load.StorageSecrets")
+
+        if self.check_secrets(secrets):
+            self.secrets = secrets
 
     def check_secrets(self):
-        # TBI check that right secrets are filled for data source
+        #TODO check that right secrets are filled for data source
         return True
 
 
@@ -55,11 +86,17 @@ class Load:
     """
     load data from/into a data storage
     """
-    def __init__(self, storage=None, secrets=None):
-        if storage is not None:
-            self.storage = Storage(storage, secrets)
+    def __init__(self, storage_name=None, secrets=None):
+        self.set_storage(storage_name, secrets)
+
+    def set_storage(self, storage_name=None, secrets=None):
+        if storage_name is not None:
+            if self.storage.name == storage_name:
+                logging.info(f"Storage already set to {storage_name}")
+            else:
+                self.storage = Storage(storage_name, secrets)
         else:
-            self.storage = None
+            raise ValueError(f"Storage not specified; provide one of {supported_storages}")
 
     def save_messages(self, messages, directory, filename):
 
