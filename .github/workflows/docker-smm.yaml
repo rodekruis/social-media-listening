@@ -1,0 +1,34 @@
+name: Update SMM docker image in ACR
+
+on:
+  push:
+    branches:
+      - smm
+    tags: [ "v*.*.*" ]
+    
+env:
+  IMAGE_NAME: rumor-tracker
+  
+jobs:
+  build:
+    name: Build and push container image
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    - name: Get tag
+      id: tag
+      uses: dawidd6/action-get-tag@v1
+    - name: Log into registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ secrets.ACR_ENDPOINT }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    - name: Build & Push
+      uses: docker/build-push-action@v3
+      with:
+        push: true
+        build-args: |
+          version=${{ steps.tag.outputs.tag }}
+        tags: ${{ secrets.ACR_ENDPOINT }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
