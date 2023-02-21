@@ -1,0 +1,63 @@
+# configuration file for rumor-tracker
+
+#general
+country-code: ""
+
+# data sources
+get-data: true
+track-azure-table: false
+track-azure-database: false
+azure-database-name: ""
+track-twitter-queries: false
+twitter-queries: [""]
+track-twitter-users: false
+track-youtube-channels: false
+track-facebook-groups: false
+# track-facebook-comments: false
+track-kobo-form: false
+text-field-kobo-form: ""
+track-telegram-groups: true
+telegram-channels-file: "/config/channels_to_track.yaml"
+
+# data parsing
+parse-data: false
+geolocate: false
+geodata-locations: ""
+geodata-country-boundaries: ""
+location-input:
+location-output: ""
+get-word-freq: false
+freq-threshold: 10
+filter-by-keywords: false
+keyword-files:
+ - "keywords1.csv"
+ - "keywords2.csv"
+translate: false
+translation-model: "" #"HuggingFace:Helsinki-NLP/opus-mt-fr-en" / "Microsoft" / "Google"
+analyse-sentiment: false
+sentiment-model: "" #"HuggingFace:finiteautomata/bertweet-base-sentiment-analysis"
+analyse-topic: false
+classify-text: false
+push-to-argilla: false
+model-filename: ""
+keys-to-topics-filename: ""
+remove-pii: false
+
+# credentials
+# the secret is a json object with some required fields; see below what is required in each case
+keyvault-url: ""
+mscognitive-url: ""
+anonymization-url: ""
+text-classification-url: ""
+azure-database-secret: ""
+twitter-secret: "" # CONSUMER_KEY, CONSUMER_SECRET, ACCESS_TOKEN, ACCESS_SECRET
+facebook-secret: "t" # token
+blobstorage-secret: "" # connection_string, container
+google-secret: "" # <service account json key>
+mscognitive-secret: "" # subscription_key, location
+kobo-secret: "" # token, asset
+telegram-secret: "" # api-id, api-hash, session-string, (optional: phone, bot-token)
+
+# data storage
+skip-datalake: false
+skip-database: false
