@@ -46,7 +46,7 @@ from azure.keyvault.secrets import SecretClient
 import datetime
 from urllib.error import HTTPError
 from joblib import Parallel, delayed
-import argilla as rg
+# import argilla as rg
 
 def get_lang_detector(nlp, name):
     return LanguageDetector(seed=42)  # We use the seed 42
@@ -782,25 +782,25 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100):
     df_results[text_column] = df_tweets[text_column]
     df_results = df_results[df_results[text_column].str.len() > 10]  # filter short messages
 
-    if config["push-to-argilla"]:
-        # initiate argilla connection
-        rg.init(api_url="https://redcross-104616782.argilla.io/", api_key=os.environ["ARGILLA_REDCROSS_API_KEY"],
-                workspace="red_cross")
+    # if config["push-to-argilla"]:
+    #     # initiate argilla connection
+    #     rg.init(api_url="https://redcross-104616782.argilla.io/", api_key=os.environ["ARGILLA_REDCROSS_API_KEY"],
+    #             workspace="red_cross")
 
     for idx, row in tqdm(df_results.iterrows(), total=df_results.shape[0]):
         message = row[text_column]
         result = request_classification(message, labels, config['text-classification-url'])
 
-        if config["push-to-argilla"]:
-            # push result to argilla
-            record = rg.TextClassificationRecord(
-                text=message,
-                prediction=list(zip(result['labels'], result['scores'])),
-                prediction_agent="zero-shot",
-                event_timestamp=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat(),
-                multi_label=True
-            )
-            rg.log(record, name="redcross-smm-subtopic-multi-label")
+        # if config["push-to-argilla"]:
+        #     # push result to argilla
+        #     record = rg.TextClassificationRecord(
+        #         text=message,
+        #         prediction=list(zip(result['labels'], result['scores'])),
+        #         prediction_agent="zero-shot",
+        #         event_timestamp=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat(),
+        #         multi_label=True
+        #     )
+        #     rg.log(record, name="redcross-smm-subtopic-multi-label")
 
         for label, score in zip(result['labels'], result['scores']):
             df_results.at[idx, label] = score
