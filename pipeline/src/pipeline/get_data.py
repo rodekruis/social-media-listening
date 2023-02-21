@@ -318,8 +318,6 @@ def get_telegram(config, days):
     telegram_secrets = get_secret_keyvault("telegram-secret", config)
     telegram_secrets = json.loads(telegram_secrets)
 
-    time_limit = 60*45 # 45 min
-    time_start = time.time()
     telegram_client = TelegramClient(
         StringSession(telegram_secrets["session-string"]),
         telegram_secrets["api-id"],
@@ -330,13 +328,48 @@ def get_telegram(config, days):
 
     df_messages = pd.DataFrame()
     df_member_counts = pd.DataFrame()
+    with telegram_client:
+        df_messages, df_member_counts = telegram_client.loop.run_until_complete(
+            scrape_messages(telegram_client, telegram_channels, start_date, end_date, df_messages, df_member_counts))
+
+    telegram_client.disconnect()
+    logging.info("Telegram client disconnected")
+
+    # Add index column
+    df_member_counts.reset_index(inplace=True)
+    df_member_counts['id'] = df_member_counts.index
+    df_messages.reset_index(inplace=True)
+    df_messages['id'] = df_messages.index
+    df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
+
+    logging.info("Saving Telegram data")
+    save_to_db("TL", df_messages, config)
+    save_data(f"{config['country-code']}_TL_messages_{start_date}_{end_date}",
+              "telegram",
+              df_messages,
+              "id",
+              "TL",
+              config)
+    save_data(f"{config['country-code']}_TL_membercount_{start_date}_{end_date}",
+              "telegram",
+              df_member_counts,
+              "id",
+              "TL",
+              config)
+
+
+async def scrape_messages(telegram_client, telegram_channels, start_date, end_date, df_messages, df_member_counts):
+    
+    time_limit = 60*45 # 45 min
+    time_start = time.time()
+
     for channel in telegram_channels:
         logging.info(f"getting in telegram channel {channel}")
         try:
-            channel_entity = telegram_client.get_entity(channel)
-            channel_full_info = telegram_client(GetFullChannelRequest(channel=channel_entity))
+            channel_entity = await telegram_client.get_entity(channel)
+            channel_full_info = await telegram_client(GetFullChannelRequest(channel=channel_entity))
 
-            for message in telegram_client.iter_messages(
+            async for message in telegram_client.iter_messages(
                 channel_entity,
                 offset_date=start_date,
                 reverse=True,
@@ -347,7 +380,7 @@ def get_telegram(config, days):
                 if channel_entity.broadcast and message.post and message.replies:
                     df_replies = pd.DataFrame()
                     try:
-                        for reply in telegram_client.iter_messages(
+                        async for reply in telegram_client.iter_messages(
                             channel_entity,
                             reply_to=message.id,
                             wait_time = 5
@@ -374,28 +407,5 @@ def get_telegram(config, days):
         except Exception as e:
             logging.error(f"in getting in telegram channel {channel}: {e}")
             break
-
-    telegram_client.disconnect()
-    logging.info("Telegram client disconnected")
-
-    # Add index column
-    df_member_counts.reset_index(inplace=True)
-    df_member_counts['id'] = df_member_counts.index
-    df_messages.reset_index(inplace=True)
-    df_messages['id'] = df_messages.index
-    df_messages['date'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
-
-    logging.info("Saving Telegram data")
-    save_to_db("TL", df_messages, config)
-    save_data(f"{config['country-code']}_TL_messages_{start_date}_{end_date}",
-              "telegram",
-              df_messages,
-              "id",
-              "TL",
-              config)
-    save_data(f"{config['country-code']}_TL_membercount_{start_date}_{end_date}",
-              "telegram",
-              df_member_counts,
-              "id",
-              "TL",
-              config)
+    
+    return df_messages, df_member_counts
