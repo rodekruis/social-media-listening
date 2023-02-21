@@ -2,8 +2,6 @@ name: Update SMM docker image in ACR
 
 on:
   push:
-    branches:
-      - smm
     tags: [ "v*.*.*" ]
     
 env:
