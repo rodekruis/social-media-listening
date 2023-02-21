@@ -376,7 +376,8 @@ async def scrape_messages(telegram_client, telegram_channels, start_date, end_da
                 wait_time = 5
             ):
                 reply = None
-                df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
+                if message is not None:
+                    df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
                 if channel_entity.broadcast and message.post and message.replies:
                     df_replies = pd.DataFrame()
                     try:
@@ -385,9 +386,11 @@ async def scrape_messages(telegram_client, telegram_channels, start_date, end_da
                             reply_to=message.id,
                             wait_time = 5
                         ):
-                            df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
+                            if reply is not None:
+                                df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
                             time.sleep(5)
-                        df_messages = df_messages.append(df_replies, ignore_index=True)
+                        if len(df_replies) > 0:
+                            df_messages = df_messages.append(df_replies, ignore_index=True)
                     except Exception as e:
                         logging.info(f"getting replies for {message.id} failed: {e}")
                     time_duration = time.time() - time_start
@@ -405,7 +408,7 @@ async def scrape_messages(telegram_client, telegram_channels, start_date, end_da
                 time.sleep(10)
                 continue
         except Exception as e:
-            logging.error(f"in getting in telegram channel {channel}: {e}")
-            break
+            logging.info(f"Unable to get in telegram channel {channel}: {e}")
+            # break
     
     return df_messages, df_member_counts
