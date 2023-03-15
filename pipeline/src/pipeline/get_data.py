@@ -376,17 +376,20 @@ async def scrape_messages(telegram_client, telegram_channels, start_date, end_da
                 wait_time = 5
             ):
                 reply = None
-                if message is not None:
+                print('message.text: ', message.text)
+                if message.text:
                     df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
                 if channel_entity.broadcast and message.post and message.replies:
                     df_replies = pd.DataFrame()
                     try:
                         async for reply in telegram_client.iter_messages(
                             channel_entity,
+                            offset_date=start_date,
+                            reverse=True,
                             reply_to=message.id,
                             wait_time = 5
                         ):
-                            if reply is not None:
+                            if reply.text:
                                 df_replies = arrange_telegram_messages(df_replies, message, reply, channel)
                             time.sleep(5)
                         if len(df_replies) > 0:
