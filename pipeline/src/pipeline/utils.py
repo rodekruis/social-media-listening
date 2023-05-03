@@ -21,11 +21,13 @@ import json
 import enchant
 import transformers
 import pyodbc
+import unicodedata as ud
 from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import *
 np.random.seed(2018)
 import nltk
 nltk.download('wordnet')
+nltk.download('words')
 import pickle
 stemmer = PorterStemmer()
 from spellchecker import SpellChecker
@@ -44,14 +46,7 @@ import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import datetime
-from urllib.error import HTTPError
-from joblib import Parallel, delayed
-import nltk
-try:
-    english_words = set(nltk.corpus.words.words())
-except:
-    nltk.download('words')
-    english_words = set(nltk.corpus.words.words())
+english_words = set(nltk.corpus.words.words())
 latin_letters = {}
 
 
@@ -482,7 +477,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     stop_words = stopwordsiso.stopwords(['uk', 'ru'])
     text_list = [word for word in text_list if word not in stop_words and not word.isnumeric()]
 
-    # Take each word from text_list and count occurence
+    # Take each word from text_list and count occurrence
     for element in text_list:
         # check if each word has '.' at its last. If so then ignore '.'
         if element[-1] == '.':
@@ -516,7 +511,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
 
     df_word_freq = df_word_freq[df_word_freq['Frequency'] >= threshold]
 
-    # Add translations
+    # add translations
     df_word_freq = translate_dataframe(df_word_freq, ['Word'], ['Translation_Russian'], config, original_language='ru')
     df_word_freq = translate_dataframe(df_word_freq, ['Word'], ['Translation_Ukrainian'], config, original_language='uk')
 
@@ -539,6 +534,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
             df_word_freq.at[ix, label] = 'x'
     df_word_freq = df_word_freq.drop(columns=['text', 'ukr_or_rus'])
 
+    # save word frequencies
     word_freq_filename = f'{config["country-code"]}_{sm_code}_wordfrequencies_{start_date}_{end_date}.csv'
     word_freq_path = './word_frequencies'
     os.makedirs(word_freq_path, exist_ok=True)
@@ -989,7 +985,6 @@ def read_db(sm_code, start_date, end_date, config):
     except Exception:
         df_messages = None
         logging.error(f"Failed to retrieve SQL table")
-        logging.error(f"{e}")
         logging.info(f"table_name: {table_name}")
         logging.info(f"query: {query}")
     finally:
