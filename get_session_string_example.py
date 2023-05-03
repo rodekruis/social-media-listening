@@ -20,8 +20,8 @@ def main():
         print(client.session.save())
 
 
-api_id = 'your-api-id' 
-api_hash = 'your-api-hash'
+api_id = 00000000
+api_hash = 'asdasdasdasdasd'
 # optional 
 phone = 'your-phone'
 username = 'your-username'

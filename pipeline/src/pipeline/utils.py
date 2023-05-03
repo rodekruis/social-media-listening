@@ -46,7 +46,14 @@ from azure.keyvault.secrets import SecretClient
 import datetime
 from urllib.error import HTTPError
 from joblib import Parallel, delayed
-# import argilla as rg
+import nltk
+try:
+    english_words = set(nltk.corpus.words.words())
+except:
+    nltk.download('words')
+    english_words = set(nltk.corpus.words.words())
+latin_letters = {}
+
 
 def get_lang_detector(nlp, name):
     return LanguageDetector(seed=42)  # We use the seed 42
@@ -415,6 +422,21 @@ def filter_by_keywords(df_tweets, text_columns, keywords, filter_name='is_confli
     return df_tweets
 
 
+def is_latin(uchr):
+    try: return latin_letters[uchr]
+    except KeyError:
+         return latin_letters.setdefault(uchr, 'LATIN' in ud.name(uchr))
+
+
+def only_roman_chars(unistr):
+    is_only_roman = all(is_latin(uchr) for uchr in unistr if uchr.isalpha())
+    is_english_word = unistr in english_words
+    if not is_only_roman and not is_english_word:
+        return False
+    else:
+        return True
+
+
 def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, config):
     logging.info('Calculating word frequencies')
 
@@ -499,6 +521,23 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     df_word_freq = translate_dataframe(df_word_freq, ['Word'], ['Translation_Ukrainian'], config, original_language='uk')
 
     df_word_freq.drop(columns=['id'], inplace=True)
+
+    # dummy classifier
+    df_word_freq['Translation_Russian'] = df_word_freq['Translation_Russian'].str.lower().str.strip()
+    df_word_freq['Translation_Ukrainian'] = df_word_freq['Translation_Ukrainian'].str.lower().str.strip()
+    df_word_freq['ukr_or_rus'] = df_word_freq['Translation_Ukrainian'].apply(lambda x: only_roman_chars(str(x)))
+    df_word_freq['text'] = np.where(df_word_freq['ukr_or_rus'], df_word_freq['Translation_Ukrainian'], df_word_freq['Translation_Russian'])
+    df_word_freq['text'] = df_word_freq['text'].str.replace('_ _', '')
+    df_word_freq['text'] = df_word_freq['text'].str.replace('__', '')
+    df_class_wordfreq = pd.read_csv('../config/wordfreq_clean.csv')
+    labels = df_class_wordfreq['label'].unique()
+    for label in labels:
+        df_word_freq[label] = ''
+    for ix, row in df_word_freq.iterrows():
+        if row['text'] in df_class_wordfreq['text'].unique():
+            label = df_class_wordfreq.loc[df_class_wordfreq['text'] == row['text'], 'label'].values[0]
+            df_word_freq.at[ix, label] = 'x'
+    df_word_freq = df_word_freq.drop(columns=['text', 'ukr_or_rus'])
 
     word_freq_filename = f'{config["country-code"]}_{sm_code}_wordfrequencies_{start_date}_{end_date}.csv'
     word_freq_path = './word_frequencies'

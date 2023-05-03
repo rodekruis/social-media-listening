@@ -1,5 +1,10 @@
 config/*.csv
+!config/wordfreq_clean.csv
 config/*.yaml
+NewNumberSteps.txt
+dump_from_db.py
+test.py
+config_archive/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
