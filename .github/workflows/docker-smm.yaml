@@ -2,7 +2,8 @@ name: Update SMM docker image in ACR
 
 on:
   push:
-    tags: [ "v*.*.*" ]
+    branches:
+      - smm
     
 env:
   IMAGE_NAME: rumor-tracker
