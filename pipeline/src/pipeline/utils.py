@@ -16,6 +16,7 @@ from time import sleep
 from requests.exceptions import ReadTimeout, ConnectionError
 import requests, uuid, json
 from shapely.geometry import Polygon, Point
+os.environ['USE_PYGEOS'] = '0'
 import geopandas as gpd
 import json
 import enchant
@@ -370,7 +371,7 @@ def translate_dataframe(df_tweets, text_column, text_column_en, config, original
 
     for idx, column in enumerate(text_column):
         # initialize empty column for translation in original dataframe
-        df_tweets.at[text_column_en[idx]] = np.nan
+        df_tweets[text_column_en[idx]] = ""
 
         # initialize dataframe for translation
         df_tweets_nona = df_tweets.dropna(subset=[column])
