@@ -518,7 +518,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
 
     df_word_freq.drop(columns=['id'], inplace=True)
 
-    # dummy classifier
+    # classify frequent words with dummy classifier (lookup dictionary)
     df_word_freq['Translation_Russian'] = df_word_freq['Translation_Russian'].str.lower().str.strip()
     df_word_freq['Translation_Ukrainian'] = df_word_freq['Translation_Ukrainian'].str.lower().str.strip()
     df_word_freq['ukr_or_rus'] = df_word_freq['Translation_Ukrainian'].apply(lambda x: only_roman_chars(str(x)))
@@ -529,10 +529,31 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     labels = df_class_wordfreq['label'].unique()
     for label in labels:
         df_word_freq[label] = ''
+    text_unknown = {}
     for ix, row in df_word_freq.iterrows():
         if row['text'] in df_class_wordfreq['text'].unique():
             label = df_class_wordfreq.loc[df_class_wordfreq['text'] == row['text'], 'label'].values[0]
             df_word_freq.at[ix, label] = 'x'
+        else:
+            text_unknown[ix] = row['text']
+    # if any frequent word not classified, use few-shot-classification-api
+    if len(text_unknown) > 0:
+        payload = {
+            'key': 'aqNjjGJHHnkDupkkh4k4JLck2hffrKxkqMHRb',
+            'texts': list(text_unknown.values()),
+            'model_name': 'sml-ukr-word-classifier-medium'
+        }
+        response = requests.post('https://few-shot-classification-api.azurewebsites.net/classify', json=payload)
+        try:
+            output = response.json()
+            if 'predictions' in output:
+                labels = [prediction['label'] for prediction in output['predictions']]
+                for ix, label in zip(list(text_unknown.keys()), labels):
+                    df_word_freq.at[ix, label] = 'x'
+        except:
+            logging.warning(f"error with few-shot-classification-api")
+            logging.warning(f"{response}")
+            pass
     df_word_freq = df_word_freq.drop(columns=['text', 'ukr_or_rus'])
 
     # save word frequencies
