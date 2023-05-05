@@ -538,8 +538,10 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
             text_unknown[ix] = row['text']
     # if any frequent word not classified, use few-shot-classification-api
     if len(text_unknown) > 0:
+        fsc_secret = get_secret_keyvault("few-shot-classification-secret", config)
+        fsc_secret = json.loads(fsc_secret)
         payload = {
-            'key': 'aqNjjGJHHnkDupkkh4k4JLck2hffrKxkqMHRb',
+            'key': fsc_secret["API-KEY"],
             'texts': list(text_unknown.values()),
             'model_name': 'sml-ukr-word-classifier-medium'
         }
