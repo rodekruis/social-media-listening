@@ -61,7 +61,10 @@ def get_secret_keyvault(secret_name, config):
     az_credential = DefaultAzureCredential()
     # Retrieve primary key for blob from the Azure Keyvault
     kv_secretClient = SecretClient(vault_url=kv_url, credential=az_credential)
-    secret_value = kv_secretClient.get_secret(config[secret_name]).value
+    if secret_name in config.keys():
+        secret_value = kv_secretClient.get_secret(config[secret_name]).value
+    else:
+        secret_value = kv_secretClient.get_secret(secret_name).value
     return secret_value
 
 
