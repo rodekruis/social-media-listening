@@ -841,11 +841,12 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100):
     fsc_secret = get_secret_keyvault("few-shot-classification-secret", config)
     fsc_secret = json.loads(fsc_secret)
     df_tweets['topic'] = None
+    list_df = [df_tweets[i:i+100] for i in range(0, len(df_tweets), 100)]
 
-    for idx, row in tqdm(df_tweets.iterrows(), total=df_tweets.shape[0]):
+    for df_tweets_ in tqdm(list_df):
         payload = {
             'key': fsc_secret["API-KEY"],
-            'texts': list(row[text_column]),
+            'texts': df_tweets_[text_column].values.tolist(),
             'model_name': 'sml-ukr-message-classifier',
             'predict_proba': True
         }
@@ -853,7 +854,7 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100):
         try:
             output = response.json()
             if 'predictions' in output:
-                for prediction in output['predictions']:
+                for idx, prediction in zip(df_tweets_.index, output['predictions']):
                     if prediction['probability'] > 0.5:
                         df_tweets.at[idx, 'topic'] = prediction['label']
         except:
