@@ -835,13 +835,13 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
     return df_tweets
 
 
-def classify_text(df_tweets, text_column, labels, config, n_examples=100):
+def classify_text(df_tweets, text_column, labels, config, n_examples=100, threshold=0.33):
     
     logging.info('Classifying messages')
     fsc_secret = get_secret_keyvault("few-shot-classification-secret", config)
     fsc_secret = json.loads(fsc_secret)
     df_tweets['topic'] = None
-    list_df = [df_tweets[i:i+100] for i in range(0, len(df_tweets), 100)]
+    list_df = [df_tweets[i:i+n_examples] for i in range(0, len(df_tweets), n_examples)]
 
     for df_tweets_ in tqdm(list_df):
         payload = {
@@ -855,7 +855,7 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100):
             output = response.json()
             if 'predictions' in output:
                 for idx, prediction in zip(df_tweets_.index, output['predictions']):
-                    if prediction['probability'] > 0.5:
+                    if prediction['probability'] > threshold:
                         df_tweets.at[idx, 'topic'] = prediction['label']
         except:
             logging.warning(f"error with few-shot-classification-api")
