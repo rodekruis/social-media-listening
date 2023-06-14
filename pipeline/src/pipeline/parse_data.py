@@ -364,10 +364,13 @@ def parse_telegram(config):
         )
 
     if config["classify-text"]:
-        if isinstance(os.environ["LABELS"], list):
-            labels = os.environ["LABELS"]
+        if "labels" in os.environ.keys():
+            if isinstance(os.environ["LABELS"], list):
+                labels = os.environ["LABELS"]
+            else:
+                labels = list(os.environ["LABELS"])
         else:
-            labels = json.loads(str(os.environ["LABELS"]))
+            labels = ['dummy']
         df_messages, df_classified = classify_text(df_messages, 'text_combined_en', labels, config)
         save_data(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}",
                   "telegram",
