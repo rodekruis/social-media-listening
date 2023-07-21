@@ -9,6 +9,8 @@ class Message:
     def __init__(self,
                  id_,
                  datetime_,
+                 datetime_scraped_,
+                 country,
                  source,  # social media source (twitter, telegram..)
                  text,
                  group=None,  # group, channel, page, account, etc.
@@ -22,6 +24,11 @@ class Message:
             self.datetime_ = datetime_
         else:
             self.datetime_ = pd.to_datetime(datetime_)
+        if isinstance(datetime_scraped_, datetime):
+            self.datetime_scraped_ = datetime_scraped_
+        else:
+            self.datetime_scraped_ = pd.to_datetime(datetime_scraped_)
+        self.country = country
         self.source = source
         self.text = text
         self.group = group
