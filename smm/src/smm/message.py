@@ -92,6 +92,12 @@ class Message:
                 raise KeyError("Classification must contain the keys 'class', 'score'")
         self.classifications.extend(dict_list)
 
+    def set_coordinates(self, lon, lat):
+        self.info['coordinates'] = {'longitude': lon, 'latitude': lat}
+
+    def set_location(self, location):
+        self.info['location'] = location
+
     def to_dict(self):
         return {
             'id': self.id_,
