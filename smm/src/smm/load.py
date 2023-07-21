@@ -220,8 +220,6 @@ class Load:
         table_service_client = TableServiceClient.from_connection_string(table_secret)
         return table_service_client.get_table_client(table_name=table)
 
-    def remove_pii(df, text_columns, config):
-
 
     def connect_to_db(self):
         # Get credentials

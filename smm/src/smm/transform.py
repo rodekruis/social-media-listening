@@ -250,7 +250,7 @@ class Transform:
 
     def classify_message(self, message):
         try:
-            text = next(x['text'] for x in message.translations if x['to_lang'] == self.classifier_lang)
+            text = next(x['text'] for x in message.translations if x['to_lang'] == self.classifier_lang) # to be fixed
         except StopIteration:
             logging.warning(f"Classifier language is {self.classifier_lang}, no translation found in message. "
                             "Classifying on original language.")
@@ -405,3 +405,4 @@ class Transform:
             df_word_freq['Translation'] = df_word_freq['Word'].apply(lambda x: self.translate(x)['text'], axis=1)
 
         return df_word_freq
+

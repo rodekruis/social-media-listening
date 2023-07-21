@@ -30,10 +30,14 @@ class Pipeline:
         if extract:
             self.messages = self.extract.get_data(start_date=start_date,
                                                   end_date=end_date,
-                                                  queries=queries)
+                                                  context=self.context)
         else:
-            self.messages = self.load.get_messages()
+            self.messages = self.load.get_messages(start_date=start_date,
+                                                   end_date=end_date,
+                                                   context=self.context)
         if transform:
-            self.transform.process_data(self.messages)
+            self.transform.process_data(messages=self.messages,
+                                        context=self.context)
         if save_output:
-            self.load.save_messages(self.messages)
+            self.load.save_messages(messages=self.messages,
+                                    context=self.context)
