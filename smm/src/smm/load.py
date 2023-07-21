@@ -9,58 +9,17 @@ from azure.storage.blob import BlobServiceClient
 from azure.data.tables import TableServiceClient
 import logging
 import pyodbc
+from secrets import Secrets
 
 
 supported_storages = ["local", "Azure SQL Database", "Azure Blob Storage"]
-
-
-class StorageSecrets:
-    """
-    Secrets (API keys, tokens, etc.) for input/output data storage
-    """
-    def __init__(self,
-                 keyvault_url=None,
-                 database_secret=None):
-
-        self.keyvault_url = keyvault_url
-        self.database_secret = database_secret
-        #TODO: automatically get secrets from environment variables (?)
-
-        def get_secret(self):
-            if self.secret_location == "env":
-                sm_secrets = self.get_secret_env()
-            if self.secret_location == "file":
-                sm_secrets = self.get_secret_file()
-            if self.secret_location == "azure":
-                sm_secrets = self.get_secret_azure()
-            return sm_secrets
-
-        def get_secret_env(self):
-            secret_file = "../credentials/env"  # TODO: where to input the file directory
-            sm_secrets = dotenv_values(secret_file)
-            return sm_secrets
-
-        def get_secret_file(self):
-            secret_file = "../credentials/secrets.json"
-            with open(secret_file, "r") as secret_file:
-                if secret_file.endswith("json"):
-                    sm_secrets = json.load(secret_file)  # TODO: set constraints of json file format?
-                elif secret_file.endswith("yaml"):
-                    sm_secrets = yaml.load(secret_file, Loader=yaml.FullLoader)
-                return sm_secrets
-
-        def get_secret_azure(self):
-            secret_name_az = ""
-            sm_secrets = self.load.get_secret_keyvault(secret_name_az)
-            sm_secrets = json.loads(sm_secrets)
-            return sm_secrets
 
 
 class Storage:
     """
     input/output data storage
     """
-    def __init__(self, name=None, secrets=None):
+    def __init__(self, name=None, secrets: Secrets = None):
         if name is None:
             self.name = "local"
         if name not in supported_storages:
@@ -68,18 +27,22 @@ class Storage:
                              f"Supported storages are {supported_storages}")
         else:
             self.name = name
-        self.secrets = self.set_secrets(secrets)
+        self.secrets = secrets
 
     def set_secrets(self, secrets):
-        if not isinstance(secrets, StorageSecrets):
-            raise TypeError(f"invalid format of secrets, use load.StorageSecrets")
+        if not isinstance(secrets, Secrets):
+            raise TypeError(f"invalid format of secrets, use secrets.Secrets")
 
         if self.check_secrets(secrets):
             self.secrets = secrets
 
     def check_secrets(self):
         #TODO check that right secrets are filled for data source
-        return True
+        # here you check if all storage-specific secrets are present
+        try:
+            db_secret = self.secrets('azure-database-secret')
+        except ValueError:
+            raise ValueError('Secrets for storage not found!')
 
 
 class Load:
