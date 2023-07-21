@@ -1,5 +1,6 @@
 from datetime import datetime
 import pandas as pd
+from smm.context import Context
 
 
 class Message:
@@ -36,38 +37,44 @@ class Message:
             self.classifications = []
 
     def from_twitter(self, dict_):
-        self.id = dict_.id
-        self.datetime_ = dict_.created_at
-        self.source = "twitter"
-        self.group = None
-        self.text = dict_.full_text
-        self.reply_to = dict_.in_reply_to_status_id
+        self.id = dict_["id"]
+        self.datetime_ = dict_["created_at"]
+        self.source = "Twitter"
+        self.group = dict_["screen_name"]
+        self.text = dict_["text"]
+        self.reply_to = dict_["in_reply_to_status_id"]
         if self.reply_to:
             self.reply = True
         else:
             self.reply = False
         self.translations = None
-        self.info = {}
+        self.info = {
+            "country": Context.country,
+            "geo": dict_["geo"],
+            "coordinates": dict_["coordinates"]}
         self.classifications = []
 
     def from_telegram(self, dict_):
-        self.id = dict_.id
-        self.datetime_ = dict_.date
-        self.source = "telegram"
-        self.group = dict_.PeerChannel.channel_id # TODO: verify
-        self.text = dict_.message
+        self.id = dict_["id"]
+        self.datetime_ = dict_["date"]
+        self.source = "Telegram"
+        self.group = dict_["PeerChannel"]["channel_id"]
+        self.text = dict_["message"]
         if dict_.post:
             self.reply = False
             self.reply_to = None
         else:
             self.reply = True
-            self.reply_to = dict_.MessageReplyHeader.reply_to_msg_id # TODO: verify 
+            self.reply_to = dict_["MessageReplyHeader"]["reply_to_msg_id"] # TODO: verify 
         self.translations = []
-        self.info = {}
+        self.info = {
+            "country": Context.country,
+            "geo": None,
+            "coordinates": None}
         self.classifications = []
 
     def from_kobo(self, dict_):
-        # TBI automatically map from telegram
+        # TBI automatically map from kobo
         pass
 
     def set_translation(self, dict_):

@@ -1,135 +1,46 @@
 from smm.message import Message
+from secrets import Secrets
 import os
-from dotenv import dotenv_values
-import yaml
 from datetime import datetime, timedelta
 import time
 import pandas as pd
-import json
 import tweepy
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest
 import requests
 import logging
-import errno
 
 
 supported_sources = ["twitter", "kobo", "telegram"]
-supported_secret_locations = ["env", "file", "azure"]
-
-class SocialMediaSecrets:
-    """
-    Secrets (API keys, tokens, etc.) for social media source.
-    Secrets should be in json format.
-    """
-    def __init__(self,
-                 source=None,
-                 secret_location=None,
-                 secret_name=None): # EX: SocialMediaSecrets(, "env", "../credentials/.env")
-        '''
-        source: name of SM e.g. "twitter", "telegram"
-        secret_location: "env", "azure"
-        secret_name: file name or secret name located in the 'secret_location'
-        '''
-        if secret_location is None:
-            self.secret_location = "env"
-        elif secret_location not in supported_secret_locations:
-            raise ValueError(f"storage {secret_location} is not supported."
-                             f"Supported storages are {supported_secret_locations}")
-        else:
-            self.secret_location = secret_location.lower()
-        self.source = source.lower()
-        self.secret_name = secret_name
-
-    def get_secret(self):
-        if self.secret_location == "env":
-            sm_secrets = self.get_secret_env()
-        if self.secret_location == "file":
-            sm_secrets = self.get_secret_file()
-        if self.secret_location == "azure":
-            sm_secrets = self.get_secret_azure()
-        return sm_secrets
-
-    def get_secret_env(self):
-        if self.secret_name is None:
-            self.secret_name = "../credentials/.env"
-        if os.path.exists(self.secret_name):
-            sm_secrets = dotenv_values(self.secret_name)
-            logging.info("Secret loaded from .env file")
-        else:
-            sm_secrets = dict(os.environ)
-            logging.warning(f"Secret env {self.secret_name} not found")
-            logging.info(f"Secret loaded from OS environment")
-        return sm_secrets
-
-    def get_secret_file(self):
-        if self.secret_name is None:
-            secret_file = f"../credentials/{self.source}_secrets.json"
-        if os.path.exists(self.secret_name):
-            with open(secret_file, "r") as secret_file:
-                if secret_file.endswith("json"):
-                    sm_secrets = json.load(secret_file)
-                    return sm_secrets
-                elif secret_file.endswith("yaml"):
-                    sm_secrets = yaml.load(secret_file, Loader=yaml.FullLoader)
-                    return sm_secrets
-                else:
-                    raise ValueError(f"Secret file type is not supported."
-                                     f"Supported file types are '.json' or '.yaml'.")
-        else:
-            raise FileNotFoundError(
-                errno.ENOENT, 
-                os.strerror(errno.ENOENT), 
-                self.secret_name)
-
-    def get_secret_azure(self):
-        sm_secrets = self.Load.get_secret_keyvault(self.secret_name)
-        sm_secrets = json.loads(sm_secrets)
-        return sm_secrets
 
 
 class SocialMediaSource:
     """
     social media source
     """
-    def __init__(self, name, secrets=None):
+    def __init__(self, name=None, secrets: Secrets=None):
         if name not in supported_sources:
-            raise ValueError(f"source {name} is not supported."
+            raise ValueError(f"Source {name} is not supported."
                              f"Supported sources are {', '.join(supported_sources)}")
         else:
             self.name = name
         self.secrets = secrets
 
     def set_secrets(self, secrets):
-        if not isinstance(secrets, SocialMediaSecrets):
-            raise TypeError(f"invalid format of secrets, use extract.SMSecrets")
-        self.secrets = secrets
+        if not isinstance(secrets, Secrets):
+            raise TypeError(f"invalid format of secrets, use secrets.Secrets")
+
+        if self.check_secrets(secrets):
+            self.secrets = secrets
 
     def check_secrets(self):
-        required_secret_set = self.which_secret_set(self.source)
-        if all(x in self.secrets.keys() for x in required_secret_set) and \
-            any("" in val for val in self.secrets.values()):
-            return True
-        else:
-            logging.warning(f"Loaded secret set is incomplete."
-                            f"Supported secrets for {self.source} are {', '.join(required_secret_set)}")
-            return False
-    
-    def which_secret_set(self):
-        if self.source == "twitter":
-            secret_set = ["API_ACCESS_TOKEN", 
-                          "API_ACCESS_SECRET", 
-                          "API_CONSUMER_KEY", 
-                          "API_CONSUMER_SECRET"]
-        elif self.source == "kobo":
-            secret_set = ["TOKEN",
-                          "ASSET"]
-        elif self.source == "telegram":
-            secret_set = ["API_ID", 
-                          "API_HASH", 
-                          "SESSION_STRING"]
-        return secret_set
+        #TODO check that right secrets are filled for data source
+        # here you check if all storage-specific secrets are present
+        try:
+            db_secret = self.secrets('azure-database-secret') # TODO change name of secrets to one needed in this script
+        except ValueError:
+            raise ValueError('Secrets for storage not found!')
 
 
 class Extract:
@@ -162,9 +73,6 @@ class Extract:
         self.channels = channels
         self.pages = pages
         self.store_temp = store_temp
-
-        if not self.source.check_secrets():
-            raise ValueError("no social media secrets found")
 
         if self.source.name == "twitter":
             logging.info('Getting Twitter data')
@@ -233,8 +141,6 @@ class Extract:
                 try:
                     for page in tweepy.Cursor(api.search_tweets,
                                             q=query,
-                                            # geocode="39.822197,34.808097,800km",
-                                            # lang="tr",
                                             include_entities=True,
                                             count=100).pages():
                         try:
@@ -262,7 +168,7 @@ class Extract:
 
 
     def get_data_kobo(self):
-        url = f'https://kobonew.ifrc.org/api/v2/assets/{self.source.secrets["ASSET"]}/data.json'
+        url = f'{self.kobo_api_url}{self.source.secrets["ASSET"]}/data.json' # kobo api url: https://kobonew.ifrc.org/api/v2/assets/
         headers = {'Authorization': f'Token {self.source.secrets["TOKEN"]}'}
         data_request = requests.get(url,
                                     headers=headers)
@@ -294,7 +200,6 @@ class Extract:
         telegram_client.connect()
         all_messages = []
         df_messages = pd.DataFrame()
-        df_counts = pd.DataFrame()
         
         for channel in self.channels:
             logging.info(f"Getting in Telegram channel {channel}")
@@ -340,7 +245,6 @@ class Extract:
                 else:
                     time.sleep(10)
                     continue
-                df_counts = self._count_messages(df_counts, df_messages, channel_full_info)
             except Exception as e:
                 logging.warning(f"Failed getting in Telegram channel {channel}: {e}")
                 break
@@ -356,39 +260,9 @@ class Extract:
         # save temp
         if self.store_temp:
             self._save_temp(df_messages, 'messages')
-            self._save_temp(df_counts, 'counts')
 
         return all_messages
 
-
-    def _arrange_telegram_messages(self, df_messages, message, reply, channel):
-        '''
-        Arrange posts and their replies from Telegram channel
-        '''
-        ix = len(df_messages)
-        df_messages.at[ix, "source"] = channel
-        df_messages.at[ix, "text"] = str(message.text)
-        if reply:
-            df_messages.at[ix, "id"] = f'{message.id}-{reply.id}'
-            df_messages.at[ix, "reply_text"] = str(reply.text)
-            df_messages.at[ix, "datetime"] = reply.date
-            df_messages.at[ix, "reply"] = True
-        else:
-            df_messages.at[ix, "id"] = f'{message.id}-0'
-            df_messages.at[ix, "reply_text"] = reply
-            df_messages.at[ix, "datetime"] = message.date
-            df_messages.at[ix, "reply"] = False
-        return df_messages
-
-
-    def _count_messages(self, df_count, df_messages, channel_full_info):
-        idx = len(df_count)
-        df_count.at[idx, 'source'] = self.source
-        member_count = channel_full_info.full_chat.participants_count
-        df_count.at[idx, 'member_count'] = member_count
-        df_count.at[idx, 'date'] = self.start_date
-        df_count.at[idx, 'message_count'] = len(df_messages[df_messages['source']==self.source])
-        return df_count
 
     def _save_temp(self, df, dataname):
         # save temp
