@@ -74,3 +74,13 @@ class Secrets:
         if secret_value is None:
             raise ValueError(f"Secret {secret} not found in {self.secret_path}")
         return secret_value
+
+    def check_secrets(self, secrets):
+        missing_secrets = []
+        for secret in secrets:
+            try:
+                self.get_secret(secret)
+            except ValueError:
+                missing_secrets.append(secret)
+
+        return missing_secrets
