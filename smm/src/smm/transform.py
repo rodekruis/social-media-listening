@@ -273,9 +273,9 @@ class Transform:
         return classification_data
 
     def classify_message(self, message: Message):
-        try:
-            text = next(x['text'] for x in message.translations if x['to_lang'] == self.classifier_lang) # to be fixed
-        except StopIteration:
+        if self.classifier_lang in [x['to_lang'] for x in message.translations]:
+            text = next(x['text'] for x in message.translations if x['to_lang'] == self.classifier_lang)
+        else:
             logging.warning(f"Classifier language is {self.classifier_lang}, no translation found in message. "
                             "Classifying on original language.")
             text = message.text
