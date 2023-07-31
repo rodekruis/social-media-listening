@@ -1,3 +1,5 @@
+import os.path
+from typing import Union
 from smm.message import Message
 import re
 import stopwordsiso
@@ -11,6 +13,9 @@ import json
 import requests
 import uuid
 import spacy
+import geopandas as gpd
+from secrets import Secrets
+from context import Context
 supported_translators = ["HuggingFace", "Google", "Microsoft", "Custom"]
 supported_classifiers = ["HuggingFace", "Custom"]
 supported_anonymizers = ["anonymization-app"]
@@ -22,12 +27,12 @@ class Transform:
     transform data
     """
 
-    def __init__(self):
+    def __init__(self, secrets: Secrets = None, context: Context = None):
+        self.secrets = secrets
         # translator fields
-        self.translator_name = None
+        self.translator_name = context.get('translator_name')
         self.from_lang = None
         self.to_lang = None
-        self.translator_secrets = None
         self.translator = None
         # classifier fields
         self.classifier_name = None
@@ -38,11 +43,19 @@ class Transform:
         # anonymizer fields
         self.anonymizer_name = None
         self.anonymizer = None
+        # geolocator fields
+        self.locations_file = None
+        self.locations_fields = None
         # wordfreq fields
         self.wordfreq_lang = None
         self.lemmatizer = None
 
-    def set_translator(self, from_lang, to_lang, name=None, secrets=None):
+    def set_translator(self, from_lang: str, to_lang: str, name: str = None, secrets: Secrets = None):
+        if self.secrets is None:
+            if secrets is None:
+                raise ValueError("Missing secrets for translator")
+            else:
+                self.secrets = secrets
         self.from_lang = from_lang
         self.to_lang = to_lang
         if self.from_lang is None or self.to_lang is None:
@@ -63,35 +76,33 @@ class Transform:
                     raise KeyError("Translation model not found on HuggingFace, please use Microsoft or Google")
 
         elif self.translator_name == "Microsoft":
-            constructed_url = secrets['MSCOGNITIVE_URL']
+            constructed_url = secrets.get_secret('MSCOGNITIVE_URL')
             params = {
                 'api-version': '3.0',
                 'from': [from_lang],
                 'to': [to_lang],
             }
             headers = {
-                'Ocp-Apim-Subscription-Key': secrets["MSCOGNITIVE_KEY"],
-                'Ocp-Apim-Subscription-Region': secrets["MSCOGNITIVE_LOCATION"],
+                'Ocp-Apim-Subscription-Key': secrets.get_secret("MSCOGNITIVE_KEY"),
+                'Ocp-Apim-Subscription-Region': secrets.get_secret("MSCOGNITIVE_LOCATION"),
                 'Content-type': 'application/json',
                 'X-ClientTraceId': str(uuid.uuid4())
             }
             self.translator = [constructed_url, params, headers]
-            self.translator_secrets = secrets
 
         elif self.translator_name == "Google":
-            service_account_info = secrets["GOOGLE_SERVICEACCOUNT"]
+            service_account_info = secrets.get_secret("GOOGLE_SERVICEACCOUNT")
             credentials = google_service_account.Credentials.from_service_account_info(json.loads(service_account_info))
             self.translator = google_translate.Client(credentials=credentials)
-            self.translator_secrets = secrets
 
         elif self.translator_name == "Custom":
-            self.translator = secrets["TRANSLATOR_API_URL"]
+            self.translator = secrets.get_secret("TRANSLATOR_API_URL")
 
         else:
             raise ValueError(f"Translator {name} is not supported. "
                              f"Supported translators are {supported_translators}")
 
-    def translate_text(self, text):
+    def translate_text(self, text: str):
         if self.translator_name is None:
             raise RuntimeError("Translator not initialized, use set_translator()")
         translation_data = {'text': ""}
@@ -159,12 +170,18 @@ class Transform:
             logging.warning("Translator returned identical message, check configuration.")
         return translation_data
 
-    def translate_message(self, message):
+    def translate_message(self, message: Message):
         translation = self.translate_text(message.text)
         message.set_translation(translation)
         return message
 
-    def set_classifier(self, name=None, lang=None, task=None, class_labels=None, secrets=None):
+    def set_classifier(self, name: str = None, lang: str = None, task: str = None,
+                       class_labels: str = None, secrets: Secrets = None):
+        if self.secrets is None:
+            if secrets is None:
+                raise ValueError("Missing secrets for classifier")
+            else:
+                self.secrets = secrets
         self.class_labels = class_labels
         if name is None:
             self.classifier_name = "HuggingFace"
@@ -203,7 +220,7 @@ class Transform:
 
         elif self.classifier_name == "Custom":
             if self.classifier_task in supported_classifier_tasks:
-                self.classifier = secrets["CLASSIFIER_API_URL"]
+                self.classifier = self.secrets.get_secret("CLASSIFIER_API_URL")
             else:
                 raise ValueError(f"Classifier task {task} is not supported. "
                                  f"Supported classifier tasks are {supported_classifier_tasks}")
@@ -212,7 +229,7 @@ class Transform:
             raise ValueError(f"Classifier {name} is not supported. "
                              f"Supported classifiers are {supported_classifiers}")
 
-    def classify_text(self, text):
+    def classify_text(self, text: str):
         if self.classifier_name is None:
             raise RuntimeError("Classifier not initialized, use set_classifier()")
         classification_data = []
@@ -248,7 +265,7 @@ class Transform:
             logging.warning("Classifier returned no results, check configuration")
         return classification_data
 
-    def classify_message(self, message):
+    def classify_message(self, message: Message):
         try:
             text = next(x['text'] for x in message.translations if x['to_lang'] == self.classifier_lang) # to be fixed
         except StopIteration:
@@ -259,7 +276,7 @@ class Transform:
         message.set_classification(classification)
         return message
 
-    def set_anonymizer(self, name=None):
+    def set_anonymizer(self, name: str = None):
         if name is None:
             self.anonymizer_name = "anonymization-app"
             self.anonymizer = "https://anonymization-app.azurewebsites.net/anonymize/"
@@ -273,7 +290,7 @@ class Transform:
             raise ValueError(f"Anonymizer {name} is not supported. "
                              f"Supported anonymizers are {supported_anonymizers}")
 
-    def anonymize(self, text):
+    def anonymize(self, text: str):
         if self.anonymizer_name is None:
             raise RuntimeError("Anonymizer not initialized, use set_anonymizer()")
         anonymized_text = text
@@ -290,9 +307,54 @@ class Transform:
 
         return anonymized_text
 
-    def set_geolocator(self):
-        # TBI
-        return 0
+    def set_geolocator(self, locations_file: str, locations_fields: Union[str, list]):
+        # select locations
+        if not os.path.exists(locations_file):
+            raise FileNotFoundError(f"{locations_file} not found for geolocator")
+        gdf = gpd.read_file(locations_file, encoding='utf8')
+        if type(locations_fields) is list:
+            for loc_col in locations_fields:
+                if loc_col not in gdf.columns:
+                    logging.warning(f"{loc_col} not in locations file {locations_file}, check config")
+                    locations_fields.remove(loc_col)
+        elif type(locations_fields) is str:
+            locations_fields = [locations_fields]
+        for loc_col in locations_fields:
+            gdf[loc_col] = gdf[loc_col].str.lower()
+        self.locations_file = gdf
+        self.locations_fields = locations_fields
+
+    def geolocate_message(self, message: Message):
+        match_geo, match_loc = None, None
+        # if "coord" is empty do string matching, else find coord
+        if 'coord' not in message.info.keys():
+            for locations_field in self.locations_fields:
+                locations = [loc.lower() for loc in self.locations_file[locations_field].values]
+                loc_match = [loc for loc in locations if loc in message.text.lower()]
+                if len(loc_match) > 0:
+                    gdf_match = self.locations_file[self.locations_file[locations_field] == loc_match[0]]
+                    match_loc = gdf_match[locations_field].values[0]
+                    match_geo = gdf_match['geometry'].values[0]
+                    break
+        else:
+            gdf_x = gpd.GeoDataFrame(pd.DataFrame({'coord': message.info['coord']}).transpose(), geometry='coord', crs="EPSG:4326")
+            res_union = gpd.overlay(gdf_x, self.locations_file, how='intersection')
+            # now taking the first match; TBI resolve ambiguities
+            if len(res_union) > 0:
+                for locations_field in self.locations_fields:
+                    match_loc = res_union[locations_field].values[0]
+                    match_geo = res_union.geometry.values[0]
+                    break
+        # extract londigude and latitude
+        if match_geo is not None:
+            try:
+                lon, lat = match_geo.x, match_geo.y
+            except:
+                lon, lat = match_geo.centroid.x, match_geo.centroid.y
+            message.set_coordinates(lon, lat)
+        if match_loc is not None:
+            message.set_location(match_loc)
+        return message
 
     def process_messages(self,
                          messages,
@@ -309,8 +371,9 @@ class Transform:
             for idx, message in enumerate(messages):
                 messages[idx] = self.classify_message(message)
         if geolocate:
-            # TBI geolocate messages
-            pass
+            logging.info('Geolocating messages')
+            for idx, message in enumerate(messages):
+                messages[idx] = self.geolocate_message(message)
         if anonymize:
             if translate:
                 logging.info('Anonymizing translated messages')
@@ -322,8 +385,9 @@ class Transform:
                         messages[idx].translations[idxt]['text'] = self.anonymize(message.translations[idxt]['text'])
                 else:
                     messages[idx].text = self.anonymize(message.text)
-
         return messages
+
+    ####################################################################################################################
 
     def set_wordfreq(self, wordfreq_lang, lemmatizer_model=None):
 
@@ -400,8 +464,7 @@ class Transform:
         # if translator is specified, use it to translate wordfreq
         if self.translator_name is not None:
             if self.from_lang != self.wordfreq_lang:
-                self.set_translator(from_lang=self.wordfreq_lang, to_lang=self.to_lang, name=self.translator_name,
-                                    secrets=self.translator_secrets)
+                self.set_translator(from_lang=self.wordfreq_lang, to_lang=self.to_lang, name=self.translator_name)
             df_word_freq['Translation'] = df_word_freq['Word'].apply(lambda x: self.translate(x)['text'], axis=1)
 
         return df_word_freq

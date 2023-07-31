@@ -4,5 +4,7 @@ class Context:
     context of the project: country, scope, any additional info
     """
     def __init__(self):
-        self.country = ""
-        self.info = ""
+        self.data = {}
+
+    def get(self, key: str):
+        return self.data.get(key)
