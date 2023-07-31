@@ -5,6 +5,7 @@ import re
 import stopwordsiso
 import pandas as pd
 from transformers import pipeline
+from torch.cuda import is_available as is_gpu_available
 from google.cloud import translate_v2 as google_translate
 from google.oauth2 import service_account as google_service_account
 from time import sleep
@@ -14,8 +15,8 @@ import requests
 import uuid
 import spacy
 import geopandas as gpd
-from secrets import Secrets
-from context import Context
+from smm.secrets import Secrets
+from smm.context import Context
 supported_translators = ["HuggingFace", "Google", "Microsoft", "Custom"]
 supported_classifiers = ["HuggingFace", "Custom"]
 supported_anonymizers = ["anonymization-app"]
@@ -30,7 +31,7 @@ class Transform:
     def __init__(self, secrets: Secrets = None, context: Context = None):
         self.secrets = secrets
         # translator fields
-        self.translator_name = context.get('translator_name')
+        self.translator_name = None
         self.from_lang = None
         self.to_lang = None
         self.translator = None
@@ -67,11 +68,13 @@ class Transform:
             self.translator_name = name
 
         if self.translator_name == "HuggingFace":
+            device = 0 if is_gpu_available() else -1
             try:
-                self.translator = pipeline(f"translation_{from_lang}_to_{to_lang}")
+                self.translator = pipeline("translation", model=f"Helsinki-NLP/opus-mt-{from_lang}-{to_lang}",
+                                           device=device)
             except ValueError:
                 try:
-                    self.translator = pipeline("translation", model=f"Helsinki-NLP/opus-mt-{from_lang}-{to_lang}")
+                    self.translator = pipeline(f"translation_{from_lang}_to_{to_lang}", device=device)
                 except:
                     raise KeyError("Translation model not found on HuggingFace, please use Microsoft or Google")
 
@@ -105,7 +108,11 @@ class Transform:
     def translate_text(self, text: str):
         if self.translator_name is None:
             raise RuntimeError("Translator not initialized, use set_translator()")
-        translation_data = {'text': ""}
+        translation_data = {
+            'text': text,
+            "from_lang": self.from_lang,
+            "to_lang": self.to_lang,
+        }
 
         if self.translator_name == "HuggingFace":
             translation = self.translator(text)
