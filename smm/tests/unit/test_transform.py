@@ -7,6 +7,7 @@ from datetime import datetime
 import numbers
 import re
 import copy
+from shapely.geometry import Point
 
 # Get logger
 logger = logging.getLogger()
@@ -94,3 +95,18 @@ def test_translate_and_anonymize():
     output = test_transformer.translate_message(test_message)
     output = test_transformer.anonymize_message(output)
     assert "<PERSON>" in output.translations[0]['text']
+
+
+def test_geolocate():
+    test_message = copy.deepcopy(template_message)
+    test_message.text = "Gigi is from Piemonte and Anna is from Veneto"
+    test_transformer.set_geolocator(locations_file="tests/data/locations.geojson", locations_fields=["reg_name"])
+    output = test_transformer.geolocate_message(test_message)
+    assert type(output.info['locations']) == list and len(output.info['locations']) == 2
+    assert 'name' in output.info['locations'][0].keys() and output.info['locations'][0]['name'] == 'piemonte'
+    assert 'name' in output.info['locations'][1].keys() and output.info['locations'][1]['name'] == 'veneto'
+
+    test_message.info['coordinates'] = Point(14.305573, 40.853294)
+    output = test_transformer.geolocate_message(test_message)
+    assert type(output.info['locations']) == list and len(output.info['locations']) == 3
+    assert 'name' in output.info['locations'][2].keys() and output.info['locations'][2]['name'] == 'campania'

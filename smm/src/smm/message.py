@@ -105,11 +105,11 @@ class Message:
                 raise KeyError("Classification must contain the keys 'class', 'score'")
         self.classifications.extend(dict_list)
 
-    def set_coordinates(self, lon, lat):
-        self.info['coordinates'] = {'longitude': lon, 'latitude': lat}
-
-    def set_location(self, location):
-        self.info['location'] = location
+    def add_location(self, name, lon, lat):
+        if 'locations' in self.info.keys():
+            self.info['locations'].append({'name': name, 'longitude': lon, 'latitude': lat})
+        else:
+            self.info['locations'] = [{'name': name, 'longitude': lon, 'latitude': lat}]
 
     def to_dict(self):
         return {

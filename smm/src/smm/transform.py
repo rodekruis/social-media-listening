@@ -347,35 +347,36 @@ class Transform:
         self.locations_fields = locations_fields
 
     def geolocate_message(self, message: Message):
-        match_geo, match_loc = None, None
-        # if "coord" is empty do string matching, else find coord
-        if 'coord' not in message.info.keys():
+        match_geo, match_loc, lon, lat = None, None, None, None
+        # if "coordinates" is empty do string matching, else find coordinates
+        if 'coordinates' not in message.info.keys():
             for locations_field in self.locations_fields:
-                locations = [loc.lower() for loc in self.locations_file[locations_field].values]
-                loc_match = [loc for loc in locations if loc in message.text.lower()]
-                if len(loc_match) > 0:
-                    gdf_match = self.locations_file[self.locations_file[locations_field] == loc_match[0]]
+                locations = [loc.lower().strip() for loc in self.locations_file[locations_field].values]
+                # exact string mathing; TBI NER
+                loc_match = [loc for loc in locations if loc in message.text.lower().strip()]
+                for loc in loc_match:
+                    gdf_match = self.locations_file[self.locations_file[locations_field] == loc]
                     match_loc = gdf_match[locations_field].values[0]
                     match_geo = gdf_match['geometry'].values[0]
-                    break
+                    try:
+                        lon, lat = match_geo.x, match_geo.y
+                    except:
+                        lon, lat = match_geo.centroid.x, match_geo.centroid.y
+                    message.add_location(name=match_loc, lon=lon, lat=lat)
         else:
-            gdf_x = gpd.GeoDataFrame(pd.DataFrame({'coord': message.info['coord']}).transpose(), geometry='coord', crs="EPSG:4326")
+            gdf_x = gpd.GeoDataFrame({'geometry': message.info['coordinates']}, index=[0], crs="EPSG:4326")
             res_union = gpd.overlay(gdf_x, self.locations_file, how='intersection')
-            # now taking the first match; TBI resolve ambiguities
+            # now taking all intersecting geometries; TBI hierarchy
             if len(res_union) > 0:
-                for locations_field in self.locations_fields:
-                    match_loc = res_union[locations_field].values[0]
-                    match_geo = res_union.geometry.values[0]
-                    break
-        # extract londigude and latitude
-        if match_geo is not None:
-            try:
-                lon, lat = match_geo.x, match_geo.y
-            except:
-                lon, lat = match_geo.centroid.x, match_geo.centroid.y
-            message.set_coordinates(lon, lat)
-        if match_loc is not None:
-            message.set_location(match_loc)
+                for ix, row in res_union.iterrows():
+                    for locations_field in self.locations_fields:
+                        match_loc = row[locations_field]
+                        match_geo = row['geometry']
+                        try:
+                            lon, lat = match_geo.x, match_geo.y
+                        except:
+                            lon, lat = match_geo.centroid.x, match_geo.centroid.y
+                        message.add_location(name=match_loc, lon=lon, lat=lat)
         return message
 
     def process_messages(self,
