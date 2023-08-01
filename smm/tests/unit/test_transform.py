@@ -38,7 +38,7 @@ def test_translate():
 
 def test_classify_sentiment():
     test_message = copy.deepcopy(template_message)
-    test_transformer.set_classifier(name="HuggingFace", task="sentiment-analysis", lang="en")
+    test_transformer.set_classifier(name="HuggingFace", task="sentiment-analysis")
     output = test_transformer.classify_message(test_message)
     assert type(output.classifications) == list and len(output.classifications) == 2
     assert 'class' in output.classifications[0].keys() and output.classifications[0]['class'] == 'POSITIVE'
@@ -51,7 +51,7 @@ def test_classify_sentiment():
 
 def test_classify_zeroshot():
     test_message = copy.deepcopy(template_message)
-    test_transformer.set_classifier(name="HuggingFace", task="zero-shot-classification", lang="en",
+    test_transformer.set_classifier(name="HuggingFace", task="zero-shot-classification",
                                     class_labels=['greetings', 'travel'])
     output = test_transformer.classify_message(test_message)
     assert type(output.classifications) == list and len(output.classifications) == 2
@@ -76,3 +76,21 @@ def test_translate_and_classify():
     assert 'class' in output.classifications[1].keys() and output.classifications[1]['class'] == 'NEGATIVE'
     assert 'score' in output.classifications[1].keys() and isinstance(output.classifications[0]['score'],
                                                                       numbers.Number)
+
+
+def test_anonymize():
+    test_message = copy.deepcopy(template_message)
+    test_message.text = "Hello my name is Jean."
+    test_transformer.set_anonymizer(name="anonymization-app")
+    output = test_transformer.anonymize_message(test_message)
+    assert "<PERSON>" in output.text
+
+
+def test_translate_and_anonymize():
+    test_message = copy.deepcopy(template_message)
+    test_message.text = "Hello my name is Jean."
+    test_transformer.set_translator(name="HuggingFace", from_lang="en", to_lang="fr")
+    test_transformer.set_anonymizer(name="anonymization-app", lang="fr")
+    output = test_transformer.translate_message(test_message)
+    output = test_transformer.anonymize_message(output)
+    assert "<PERSON>" in output.translations[0]['text']

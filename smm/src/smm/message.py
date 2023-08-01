@@ -77,14 +77,27 @@ class Message:
         # TBI automatically map from telegram
         pass
 
-    def set_translation(self, dict_):
+    def add_translation(self, dict_):
         if type(dict_) is not dict:
             raise TypeError("Translation must be a dictionary")
         if list(dict_.keys()) != ['text', 'from_lang', 'to_lang']:
             raise KeyError("Translation must contain the keys 'text', 'from_lang', 'to_lang'")
         self.translations.append(dict_)
 
-    def set_classification(self, dict_list):
+    def set_translation(self, dict_):
+        if type(dict_) is not dict:
+            raise TypeError("Translation must be a dictionary")
+        if list(dict_.keys()) != ['text', 'from_lang', 'to_lang']:
+            raise KeyError("Translation must contain the keys 'text', 'from_lang', 'to_lang'")
+        translation_found = False
+        for ix, trans in enumerate(self.translations):
+            if dict_['to_lang'] == trans['to_lang'] and dict_['from_lang'] == trans['from_lang']:
+                self.translations[ix]['text'] = dict_['text']
+                translation_found = True
+        if not translation_found:
+            self.translations.append(dict_)
+
+    def add_classification(self, dict_list):
         if type(dict_list) is not list:
             raise TypeError("Classification must be a list of dictionaries")
         for dict_ in dict_list:

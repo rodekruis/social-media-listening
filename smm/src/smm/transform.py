@@ -43,6 +43,7 @@ class Transform:
         self.classifier = None
         # anonymizer fields
         self.anonymizer_name = None
+        self.anonymizer_lang = None
         self.anonymizer = None
         # geolocator fields
         self.locations_file = None
@@ -179,7 +180,7 @@ class Transform:
 
     def translate_message(self, message: Message):
         translation = self.translate_text(message.text)
-        message.set_translation(translation)
+        message.add_translation(translation)
         return message
 
     def set_classifier(self, name: str = None, lang: str = None, task: str = None,
@@ -199,10 +200,7 @@ class Transform:
         else:
             self.classifier_task = task
 
-        if lang is None:
-            self.classifier_lang = "en"
-        else:
-            self.classifier_lang = lang
+        self.classifier_lang = lang
 
         if self.classifier_task == "sentiment-analysis":
             self.class_labels = ["POSITIVE", "NEGATIVE"]
@@ -273,22 +271,26 @@ class Transform:
         return classification_data
 
     def classify_message(self, message: Message):
-        if self.classifier_lang in [x['to_lang'] for x in message.translations]:
+        if self.classifier_lang is None:
+            text = message.text
+        elif self.classifier_lang in [x['to_lang'] for x in message.translations]:
             text = next(x['text'] for x in message.translations if x['to_lang'] == self.classifier_lang)
         else:
-            logging.warning(f"Classifier language is {self.classifier_lang}, no translation found in message. "
-                            "Classifying on original language.")
+            logging.warning(f"Classifier language is {self.classifier_lang}, but no corresponding translation was found"
+                            f" in message. Classifying original text.")
             text = message.text
         classification = self.classify_text(text)
-        message.set_classification(classification)
+        message.add_classification(classification)
         return message
 
-    def set_anonymizer(self, name: str = None):
+    def set_anonymizer(self, name: str = None, lang: str = None):
         if name is None:
             self.anonymizer_name = "anonymization-app"
             self.anonymizer = "https://anonymization-app.azurewebsites.net/anonymize/"
         else:
             self.anonymizer_name = name
+
+        self.anonymizer_lang = lang
 
         if self.anonymizer_name == "anonymization-app":
             self.anonymizer = "https://anonymization-app.azurewebsites.net/anonymize/"
@@ -297,7 +299,7 @@ class Transform:
             raise ValueError(f"Anonymizer {name} is not supported. "
                              f"Supported anonymizers are {supported_anonymizers}")
 
-    def anonymize(self, text: str):
+    def anonymize_text(self, text: str):
         if self.anonymizer_name is None:
             raise RuntimeError("Anonymizer not initialized, use set_anonymizer()")
         anonymized_text = text
@@ -313,6 +315,19 @@ class Transform:
                 sleep(10)
 
         return anonymized_text
+
+    def anonymize_message(self, message: Message):
+        if self.anonymizer_lang is None:
+            message.text = self.anonymize_text(message.text)
+        elif self.anonymizer_lang in [x['to_lang'] for x in message.translations]:
+            translation = next(x for x in message.translations if x['to_lang'] == self.classifier_lang)
+            translation['text'] = self.anonymize_text(translation['text'])
+            message.set_translation(translation)
+        else:
+            logging.warning(f"Anonymizer language is {self.anonymizer_lang}, but no corresponding translation was found"
+                            f" in message. Anonymizing original text.")
+            message.text = self.anonymize_text(message.text)
+        return message
 
     def set_geolocator(self, locations_file: str, locations_fields: Union[str, list]):
         # select locations
@@ -382,16 +397,9 @@ class Transform:
             for idx, message in enumerate(messages):
                 messages[idx] = self.geolocate_message(message)
         if anonymize:
-            if translate:
-                logging.info('Anonymizing translated messages')
-            else:
-                logging.info('Anonymizing messages')
+            logging.info('Anonymizing messages')
             for idx, message in enumerate(messages):
-                if translate:
-                    for idxt, translation in enumerate(messages[idx].translations):
-                        messages[idx].translations[idxt]['text'] = self.anonymize(message.translations[idxt]['text'])
-                else:
-                    messages[idx].text = self.anonymize(message.text)
+                messages[idx] = self.anonymize_message(message)
         return messages
 
     ####################################################################################################################
