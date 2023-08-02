@@ -1,6 +1,6 @@
 from datetime import datetime
 import pandas as pd
-from smm.context import Context
+from src.smm.context import Context
 
 
 class Message:
@@ -11,7 +11,7 @@ class Message:
                  id_,
                  datetime_,
                  datetime_scraped_,
-                 country,
+                 country, # we should remove this because it is already contained in `info`
                  source,  # social media source (twitter, telegram..)
                  text,
                  group=None,  # group, channel, page, account, etc.
