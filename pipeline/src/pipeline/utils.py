@@ -835,7 +835,7 @@ def predict_topic(df_tweets, text_column, sm_code, start_date, end_date, config,
     return df_tweets
 
 
-def classify_text(df_tweets, text_column, labels, config, n_examples=100, threshold=0.33):
+def classify_text(df_tweets, text_raw, text_processed, labels, config, n_examples=100, threshold=0.33):
     
     logging.info('Classifying messages')
     fsc_secret = get_secret_keyvault("few-shot-classification-secret", config)
@@ -846,7 +846,7 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100, thresh
     for df_tweets_ in tqdm(list_df):
         payload = {
             'key': fsc_secret["API-KEY"],
-            'texts': df_tweets_[text_column].values.tolist(),
+            'texts': df_tweets_[text_processed].values.tolist(),
             'model_name': 'sml-ukr-message-classifier',
             'predict_proba': True
         }
@@ -862,9 +862,18 @@ def classify_text(df_tweets, text_column, labels, config, n_examples=100, thresh
             logging.warning(f"{response}")
             pass
 
-    df_classified_text = df_tweets[[text_column, 'topic']].copy()
-    
-    # # score all messages
+    df_classified_text = df_tweets[[text_processed, 'topic']].copy()
+
+    # check if keywords are present
+    df_tweets['keywords'] = None
+    df_tweets[text_raw] = df_tweets[text_raw].str.lower()
+    labels = [label.lower().strip() for label in labels]
+    for idx, row in df_tweets.iterrows():
+        for label in labels:
+            if label in row[text_raw]:
+                df_tweets.at[idx, 'keywords'] = label
+
+        # # score all messages
     # df_results = pd.DataFrame(columns=labels)
     # df_results[text_column] = df_tweets[text_column]
     # df_results = df_results[df_results[text_column].str.len() > 10]  # filter short messages

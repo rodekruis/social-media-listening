@@ -371,7 +371,7 @@ def parse_telegram(config):
                 labels = list(os.environ["LABELS"])
         else:
             labels = ['dummy']
-        df_messages, df_classified = classify_text(df_messages, 'text_combined_en', labels, config)
+        df_messages, df_classified = classify_text(df_messages, 'text_post', 'text_combined_en', labels, config)
         save_data(f"{config['country-code']}_{sm_code}_messagesclassified_{start_date}_{end_date}",
                   "telegram",
                   df_classified,
