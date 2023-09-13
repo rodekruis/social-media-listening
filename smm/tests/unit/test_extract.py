@@ -4,10 +4,6 @@ from smm.extract import Extract
 from smm.secrets import Secrets
 from smm.message import Message
 from datetime import datetime, timedelta
-import numbers
-import re
-import copy
-from shapely.geometry import Point
 
 # Get logger
 logger = logging.getLogger()
@@ -28,12 +24,12 @@ test_extractor.get_data(channels=["t.me/UAinplovdiv"],
 
 
 
-# Initialize test message
-template_message = Message(
-    id_=0,
-    datetime_=datetime.now(),
-    datetime_scraped_=datetime.now(),
-    country="NLD",
-    source="Twitter",
-    text="Hello world!")
+# # Initialize test message
+# template_message = Message(
+#     id_=0,
+#     datetime_=datetime.now(),
+#     datetime_scraped_=datetime.now(),
+#     country="NLD",
+#     source="Twitter",
+#     text="Hello world!")
 

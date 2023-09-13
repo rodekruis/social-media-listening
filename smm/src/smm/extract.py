@@ -10,6 +10,7 @@ from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest
 import requests
 import logging
+import asyncio
 
 
 supported_sources = ["twitter", "kobo", "telegram"]
@@ -196,19 +197,19 @@ class Extract:
             self.source.secrets.API_ID,
             self.source.secrets.API_HASH
         )
-        telegram_client.connect()
-        logging.info("Telegram client connected")
+        # telegram_client.connect()
+        # logging.info("Telegram client connected")
 
         # all_messages = []
         # df_messages = pd.DataFrame()
 
-        with telegram_client:
-            all_messages = telegram_client.loop.run_until_complete(
-                self._scrape_messages(telegram_client,
-                                      self.channels, 
-                                      self.start_date, 
-                                      self.end_date))#,
-                                    #   df_messages))
+        loop = asyncio.get_event_loop()
+        all_messages = loop.run_until_complete(
+            self._scrape_messages(telegram_client,
+                                self.channels, 
+                                self.start_date, 
+                                self.end_date)
+                                )
 
         telegram_client.disconnect()
 
@@ -226,15 +227,20 @@ class Extract:
         return all_messages
 
 
-    async def _scrape_messages(telegram_client, telegram_channels, start_date, end_date):
-        
+    async def _scrape_messages(self, telegram_client, telegram_channels, start_date, end_date):
+
+        await telegram_client.connect()
+        logging.info("Telegram client connected")
+
         time_limit = 60*45 # 45 min
         time_start = time.time()
         all_messages = []
 
-        for channel in telegram_channels:
-            logging.info(f"getting in telegram channel {channel}")
-            try:
+        async with telegram_client:
+
+            for channel in telegram_channels:
+                logging.info(f"getting in telegram channel {channel}")
+                # try:
                 channel_entity = await telegram_client.get_entity(channel)
                 # channel_full_info = await telegram_client(
                 #     GetFullChannelRequest(channel=channel_entity))
@@ -252,34 +258,36 @@ class Extract:
                     all_messages.append(message)
                     if channel_entity.broadcast and raw_message.post and raw_message.replies:
                         replied_post_id.append(raw_message.id)
-                
-                # scrape replies
-                for post_id in replied_post_id:
-                    try:
-                        async for raw_reply in telegram_client.iter_messages(
-                            channel_entity,
-                            offset_date = end_date,
-                            reverse = True,
-                            reply_to = post_id,
-                            wait_time = 5
-                        ):
-                            reply = Message.from_telegram(raw_reply)
-                            all_messages.append(reply)
-                            time.sleep(5)
-                    except Exception as e:
-                        logging.info(f"getting replies for {message.id} failed: {e}")
                     
-                    time_duration = time.time() - time_start
-                    if time_duration >= time_limit:
-                        logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
-                        break
-                else:
-                    time.sleep(10)
-                    continue
-            except Exception as e:
-                logging.info(f"Unable to get in telegram channel {channel}: {e}")
-                break
+                    # # scrape replies
+                    # for post_id in replied_post_id:
+                    #     try:
+                    #         async for raw_reply in telegram_client.iter_messages(
+                    #             channel_entity,
+                    #             offset_date = end_date,
+                    #             reverse = True,
+                    #             reply_to = post_id,
+                    #             wait_time = 5
+                    #         ):
+                    #             reply = Message.from_telegram(raw_reply)
+                    #             all_messages.append(reply)
+                    #             time.sleep(5)
+                    #     except Exception as e:
+                    #         logging.info(f"getting replies for {message.id} failed: {e}")
+                        
+                    #     time_duration = time.time() - time_start
+                    #     if time_duration >= time_limit:
+                    #         logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
+                    #         break
+                    else:
+                        time.sleep(10)
+                        continue
+                # except Exception as e:
+                #     logging.info(f"Unable to get in telegram channel {channel}: {e}")
+                #     break
         
+        await telegram_client.disconnect()
+
         return all_messages
 
 
