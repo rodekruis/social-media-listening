@@ -209,54 +209,6 @@ class Extract:
                                       self.start_date, 
                                       self.end_date))#,
                                     #   df_messages))
-        
-        # for channel in self.channels:
-        #     logging.info(f"Getting in Telegram channel {channel}")
-        #     try:
-        #         channel_entity = telegram_client.get_entity(channel)
-        #         # channel_full_info = telegram_client(
-        #         #     GetFullChannelRequest(channel=channel_entity)
-        #         #     )
-        #         # scrape posts
-        #         replied_post_id = []
-        #         for raw_message in telegram_client.iter_messages(
-        #             channel_entity,
-        #             offset_date = self.end_date,
-        #             reverse = True,
-        #             wait_time = 5
-        #         ):
-        #             reply = None
-        #             message = Message.from_telegram(message)
-        #             all_messages.append(message)
-        #             if channel_entity.broadcast and raw_message.post and raw_message.replies:
-        #                 replied_post_id.append(raw_message.id)
-                
-        #         # scrape replies
-        #         for post_id in replied_post_id:
-        #             try:
-        #                 for raw_reply in telegram_client.iter_messages(
-        #                     channel_entity,
-        #                     offset_date = self.end_date,
-        #                     reverse = True,
-        #                     reply_to = post_id,
-        #                     wait_time = 5
-        #                 ):
-        #                     reply = Message.from_telegram(raw_reply)
-        #                     all_messages.append(reply)
-        #                     time.sleep(5)
-        #             except Exception as e:
-        #                 logging.info(f"Skipping replies for {raw_message.id}: {e}")
-
-        #             time_duration = time.time() - time_start
-        #             if time_duration >= time_limit:
-        #                 logging.warning(f"Getting replies for {channel} stopped: timeout {time_duration} seconds")
-        #                 break
-        #         else:
-        #             time.sleep(10)
-        #             continue
-        #     except Exception as e:
-        #         logging.warning(f"Failed getting in Telegram channel {channel}: {e}")
-        #         break
 
         telegram_client.disconnect()
 
@@ -290,12 +242,13 @@ class Extract:
                 replied_post_id = []
                 async for raw_message in telegram_client.iter_messages(
                     channel_entity,
-                    offset_date=start_date,
-                    reverse=True,
+                    offset_date = end_date,
+                    reverse = True,
                     wait_time = 5
                 ):
+                    print('raw_message: ', raw_message)
                     reply = None
-                    message = Message.from_telegram(message)
+                    message = Message.from_telegram(raw_message)
                     all_messages.append(message)
                     if channel_entity.broadcast and raw_message.post and raw_message.replies:
                         replied_post_id.append(raw_message.id)
@@ -303,9 +256,9 @@ class Extract:
                 # scrape replies
                 for post_id in replied_post_id:
                     try:
-                        for raw_reply in telegram_client.iter_messages(
+                        async for raw_reply in telegram_client.iter_messages(
                             channel_entity,
-                            offset_date = self.end_date,
+                            offset_date = end_date,
                             reverse = True,
                             reply_to = post_id,
                             wait_time = 5
