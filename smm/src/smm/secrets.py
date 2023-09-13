@@ -47,6 +47,8 @@ class Secrets:
         elif self.secret_source is SecretsSource.json:
             with open(self.secret_path) as file:
                 self.secrets = json.load(file)
+                for k, v in self.secrets.items():
+                    setattr(self, k, v)
         elif self.secret_source is SecretsSource.yaml:
             self.secrets = yaml.load(self.secret_path, Loader=yaml.FullLoader)
         elif self.secret_source is SecretsSource.azure:
@@ -82,5 +84,4 @@ class Secrets:
                 self.get_secret(secret)
             except ValueError:
                 missing_secrets.append(secret)
-
         return missing_secrets

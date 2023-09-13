@@ -1,5 +1,5 @@
 from smm.message import Message
-from secrets import Secrets
+from smm.secrets import Secrets
 import os
 from datetime import datetime, timedelta
 import time
@@ -25,14 +25,15 @@ class SocialMediaSource:
                              f"Supported sources are {', '.join(supported_sources)}")
         else:
             self.name = name
-        self.secrets = secrets
+        self.secrets = self.set_secrets(secrets)
 
     def set_secrets(self, secrets):
         if not isinstance(secrets, Secrets):
             raise TypeError(f"invalid format of secrets, use secrets.Secrets")
-
-        if self.check_secrets(secrets):
+        # if self.check_secrets(secrets):
+        else:
             self.secrets = secrets
+            return self.secrets
 
     def check_secrets(self):
         #TODO check that right secrets are filled for data source
@@ -48,14 +49,14 @@ class Extract:
     extract data from social media
     """
 
-    def __init__(self, source=None, secrets=None):
+    def __init__(self, source=None, secrets: Secrets=None):
+        self.set_source(source, secrets)
+
+    def set_source(self, source, secrets):
         if source is not None:
             self.source = SocialMediaSource(source, secrets)
         else:
-            self.source = None
-
-    def set_source(self, source, secrets):
-        self.source = SocialMediaSource(source, secrets)
+            raise ValueError(f"Source not specified; provide one of {supported_sources}")
 
     def get_data(self,
                  start_date=datetime.today(),
@@ -190,30 +191,107 @@ class Extract:
 
     def get_data_telegram(self):
         # Set timmer to avoid scraping for too long
-        time_limit = 60*45 # 45 min
-        time_start = time.time()
         telegram_client = TelegramClient(
-            StringSession(self.source.secrets["SESSION_STRING"]),
-            self.source.secrets["API_ID"],
-            self.source.secrets["API_HASH"]
+            StringSession(self.source.secrets.SESSION_STRING),
+            self.source.secrets.API_ID,
+            self.source.secrets.API_HASH
         )
         telegram_client.connect()
-        all_messages = []
-        df_messages = pd.DataFrame()
+        logging.info("Telegram client connected")
+
+        # all_messages = []
+        # df_messages = pd.DataFrame()
+
+        with telegram_client:
+            all_messages = telegram_client.loop.run_until_complete(
+                self._scrape_messages(telegram_client,
+                                      self.channels, 
+                                      self.start_date, 
+                                      self.end_date))#,
+                                    #   df_messages))
         
-        for channel in self.channels:
-            logging.info(f"Getting in Telegram channel {channel}")
+        # for channel in self.channels:
+        #     logging.info(f"Getting in Telegram channel {channel}")
+        #     try:
+        #         channel_entity = telegram_client.get_entity(channel)
+        #         # channel_full_info = telegram_client(
+        #         #     GetFullChannelRequest(channel=channel_entity)
+        #         #     )
+        #         # scrape posts
+        #         replied_post_id = []
+        #         for raw_message in telegram_client.iter_messages(
+        #             channel_entity,
+        #             offset_date = self.end_date,
+        #             reverse = True,
+        #             wait_time = 5
+        #         ):
+        #             reply = None
+        #             message = Message.from_telegram(message)
+        #             all_messages.append(message)
+        #             if channel_entity.broadcast and raw_message.post and raw_message.replies:
+        #                 replied_post_id.append(raw_message.id)
+                
+        #         # scrape replies
+        #         for post_id in replied_post_id:
+        #             try:
+        #                 for raw_reply in telegram_client.iter_messages(
+        #                     channel_entity,
+        #                     offset_date = self.end_date,
+        #                     reverse = True,
+        #                     reply_to = post_id,
+        #                     wait_time = 5
+        #                 ):
+        #                     reply = Message.from_telegram(raw_reply)
+        #                     all_messages.append(reply)
+        #                     time.sleep(5)
+        #             except Exception as e:
+        #                 logging.info(f"Skipping replies for {raw_message.id}: {e}")
+
+        #             time_duration = time.time() - time_start
+        #             if time_duration >= time_limit:
+        #                 logging.warning(f"Getting replies for {channel} stopped: timeout {time_duration} seconds")
+        #                 break
+        #         else:
+        #             time.sleep(10)
+        #             continue
+        #     except Exception as e:
+        #         logging.warning(f"Failed getting in Telegram channel {channel}: {e}")
+        #         break
+
+        telegram_client.disconnect()
+
+        # drop duplicates
+        df_messages = pd.DataFrame(all_messages).reset_index(inplace=True)
+        print('df_messages: ', df_messages)
+        df_messages['datetime'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
+        df_messages = df_messages.drop_duplicates(subset=['id'])
+        all_messages = df_messages.to_dict("records")
+
+        # save temp
+        if self.store_temp:
+            self._save_temp(df_messages, 'messages')
+
+        return all_messages
+
+
+    async def _scrape_messages(telegram_client, telegram_channels, start_date, end_date):
+        
+        time_limit = 60*45 # 45 min
+        time_start = time.time()
+        all_messages = []
+
+        for channel in telegram_channels:
+            logging.info(f"getting in telegram channel {channel}")
             try:
-                channel_entity = telegram_client.get_entity(channel)
-                channel_full_info = telegram_client(
-                    GetFullChannelRequest(channel=channel_entity)
-                    )
+                channel_entity = await telegram_client.get_entity(channel)
+                # channel_full_info = await telegram_client(
+                #     GetFullChannelRequest(channel=channel_entity))
                 # scrape posts
                 replied_post_id = []
-                for raw_message in telegram_client.iter_messages(
+                async for raw_message in telegram_client.iter_messages(
                     channel_entity,
-                    offset_date = self.end_date,
-                    reverse = True,
+                    offset_date=start_date,
+                    reverse=True,
                     wait_time = 5
                 ):
                     reply = None
@@ -236,31 +314,19 @@ class Extract:
                             all_messages.append(reply)
                             time.sleep(5)
                     except Exception as e:
-                        logging.info(f"Skipping replies for {raw_message.id}: {e}")
-
+                        logging.info(f"getting replies for {message.id} failed: {e}")
+                    
                     time_duration = time.time() - time_start
                     if time_duration >= time_limit:
-                        logging.warning(f"Getting replies for {channel} stopped: timeout {time_duration} seconds")
+                        logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
                         break
                 else:
                     time.sleep(10)
                     continue
             except Exception as e:
-                logging.warning(f"Failed getting in Telegram channel {channel}: {e}")
+                logging.info(f"Unable to get in telegram channel {channel}: {e}")
                 break
-
-        telegram_client.disconnect()
-
-        # drop duplicates
-        df_messages = pd.DataFrame(all_messages).reset_index(inplace=True)
-        df_messages['datetime'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
-        df_messages = df_messages.drop_duplicates(subset=['id'])
-        all_messages = df_messages.to_dict("records")
-
-        # save temp
-        if self.store_temp:
-            self._save_temp(df_messages, 'messages')
-
+        
         return all_messages
 
 
