@@ -1,5 +1,6 @@
 from telethon import TelegramClient
 from telethon.sessions import StringSession
+import asyncio
 
 '''
 Usage:
@@ -12,12 +13,13 @@ Usage:
 '''
 
 
-def main():
+async def main():
     '''
     Function to get Telegram session string
     '''
-    with TelegramClient(StringSession(), api_id, api_hash) as client:
-        print(client.session.save())
+    async with TelegramClient(StringSession(), api_id, api_hash) as client:
+        string_session = client.session
+        print(string_session.save())
 
 
 api_id = 00000000
@@ -27,4 +29,4 @@ phone = 'your-phone'
 username = 'your-username'
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
