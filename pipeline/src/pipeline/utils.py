@@ -561,7 +561,7 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
             pass
     df_word_freq = df_word_freq.drop(columns=['text', 'ukr_or_rus'])
 
-    # save word frequencies
+    # save word frequencies and category count
     word_freq_filename = f'{config["country-code"]}_{sm_code}_wordfrequencies_{start_date}_{end_date}.csv'
     word_freq_path = './word_frequencies'
     os.makedirs(word_freq_path, exist_ok=True)
@@ -575,6 +575,26 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
         logging.info(f'Uploading word frequencies for later use')
         blob_client = get_blob_service_client(os.path.join(word_freq_blob_path, word_freq_filename), config)
         with open(word_freq_filepath, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
+        
+    # list and count words per category
+    df_cat = pd.DataFrame(columns=['category', 'frequency', 'words'])
+    for col in df_word_freq.columns:
+        if col == 'Translation_Ukrainian' or col == 'Frequency' or col == 'NONE':
+            continue
+        df_col = df_word_freq.dropna(subset=[col])
+        count_cat = df_col['Frequency'].sum()
+        words_cat = df_col['Translation_Ukrainian'].values.tolist()
+        df_cat.loc[len(df_cat)] = [col, count_cat, words_cat]
+    df_cat = df_cat.sort_values(by='frequency', ascending=False)
+    
+    cat_count_filename = f'{config["country-code"]}_{sm_code}_categorycounts_{start_date}_{end_date}.csv'
+    cat_count_filepath = os.path.join(word_freq_path, cat_count_filename)
+    df_cat.to_csv(cat_count_filepath, index=False)
+
+    if not config["skip-datalake"]:
+        blob_client = get_blob_service_client(os.path.join(word_freq_blob_path, cat_count_filename), config)
+        with open(cat_count_filepath, "rb") as data:
             blob_client.upload_blob(data, overwrite=True)
 
     return
@@ -1154,7 +1174,7 @@ def connect_to_db(config):
 
     try:
         # Connect to db
-        driver = '{ODBC Driver 18 for SQL Server}'
+        driver = '{ODBC Driver 17 for SQL Server}'
         connection = pyodbc.connect(
             f'DRIVER={driver};'
             f'SERVER=tcp:{database_secret["SQL_DB_SERVER"]};'
