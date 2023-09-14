@@ -61,18 +61,18 @@ class Message:
             "coordinates": dict_["coordinates"]}
         self.classifications = []
 
-    def from_telegram(self, dict_):
-        self.id = dict_["id"]
-        self.datetime_ = dict_["date"]
+    def from_telegram(self, message_entity):
+        self.id = message_entity.id
+        self.datetime_ = message_entity.date
         self.source = "Telegram"
-        self.group = dict_["PeerChannel"]["channel_id"]
-        self.text = dict_["message"]
-        if dict_.post:
+        self.group = message_entity.Peer.PeerChannel.channel_id
+        self.text = message_entity.message
+        if message_entity.post:
             self.reply = False
             self.reply_to = None
         else:
             self.reply = True
-            self.reply_to = dict_["MessageReplyHeader"]["reply_to_msg_id"] # TODO: verify 
+            self.reply_to = message_entity.MessageReplyHeader.reply_to_msg_id
         self.translations = []
         self.info = {
             "country": Context.country,

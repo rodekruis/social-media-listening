@@ -252,33 +252,32 @@ class Extract:
                     reverse = True,
                     wait_time = 5
                 ):
-                    print('raw_message: ', raw_message)
                     reply = None
                     message = Message.from_telegram(raw_message)
                     all_messages.append(message)
                     if channel_entity.broadcast and raw_message.post and raw_message.replies:
                         replied_post_id.append(raw_message.id)
                     
-                    # # scrape replies
-                    # for post_id in replied_post_id:
-                    #     try:
-                    #         async for raw_reply in telegram_client.iter_messages(
-                    #             channel_entity,
-                    #             offset_date = end_date,
-                    #             reverse = True,
-                    #             reply_to = post_id,
-                    #             wait_time = 5
-                    #         ):
-                    #             reply = Message.from_telegram(raw_reply)
-                    #             all_messages.append(reply)
-                    #             time.sleep(5)
-                    #     except Exception as e:
-                    #         logging.info(f"getting replies for {message.id} failed: {e}")
+                    # scrape replies
+                    for post_id in replied_post_id:
+                        try:
+                            async for raw_reply in telegram_client.iter_messages(
+                                channel_entity,
+                                offset_date = end_date,
+                                reverse = True,
+                                reply_to = post_id,
+                                wait_time = 5
+                            ):
+                                reply = Message.from_telegram(raw_reply)
+                                all_messages.append(reply)
+                                time.sleep(5)
+                        except Exception as e:
+                            logging.info(f"getting replies for {message.id} failed: {e}")
                         
-                    #     time_duration = time.time() - time_start
-                    #     if time_duration >= time_limit:
-                    #         logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
-                    #         break
+                        time_duration = time.time() - time_start
+                        if time_duration >= time_limit:
+                            logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
+                            break
                     else:
                         time.sleep(10)
                         continue
