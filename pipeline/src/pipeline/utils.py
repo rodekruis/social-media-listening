@@ -580,9 +580,10 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     # list and count words per category
     df_cat = pd.DataFrame(columns=['category', 'frequency', 'words'])
     for col in df_word_freq.columns:
-        if col == 'Translation_Ukrainian' or col == 'Frequency' or col == 'NONE':
+        if (col == 'Translation_Russian' or col == 'Word' or
+                col == 'Translation_Ukrainian' or col == 'Frequency' or col == 'NONE'):
             continue
-        df_col = df_word_freq.dropna(subset=[col])
+        df_col = df_word_freq[df_word_freq[col] == 'x']
         count_cat = df_col['Frequency'].sum()
         words_cat = df_col['Translation_Ukrainian'].values.tolist()
         df_cat.loc[len(df_cat)] = [col, count_cat, words_cat]

@@ -5,6 +5,7 @@ NewNumberSteps.txt
 dump_from_db.py
 test.py
 config_archive/
+test/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
