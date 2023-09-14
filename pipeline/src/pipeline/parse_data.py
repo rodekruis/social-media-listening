@@ -316,6 +316,10 @@ def parse_telegram(config):
 
     # Remove combined and merged text columns
     df_messages = df_messages.drop(columns=['text_combined', 'text_merged'])
+    
+    # remove duplicates and short messages
+    df_messages = df_messages.drop_duplicates(subset=['text_post'])
+    df_messages = df_messages[df_messages['text_post'].str.len() > 10]
 
     # translate telegram messages
     if config["translate"]:
