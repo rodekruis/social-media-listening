@@ -1174,7 +1174,7 @@ def connect_to_db(config):
 
     try:
         # Connect to db
-        driver = '{ODBC Driver 17 for SQL Server}'
+        driver = '{ODBC Driver 18 for SQL Server}'
         connection = pyodbc.connect(
             f'DRIVER={driver};'
             f'SERVER=tcp:{database_secret["SQL_DB_SERVER"]};'
