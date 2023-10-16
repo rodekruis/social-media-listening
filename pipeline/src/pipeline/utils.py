@@ -508,26 +508,33 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
     df_word_freq.columns = ['Word', 'Frequency']
     df_word_freq['id'] = df_word_freq.index
 
-    # Delete everything with freq lower than 10
+    # Delete everything with freq lower than freq-threshold
     if config['freq-threshold']:
         threshold = config['freq-threshold']
-    # threshold = 1
 
     df_word_freq = df_word_freq[df_word_freq['Frequency'] >= threshold]
 
     # add translations
     df_word_freq = translate_dataframe(df_word_freq, ['Word'], ['Translation_Russian'], config, original_language='ru')
     df_word_freq = translate_dataframe(df_word_freq, ['Word'], ['Translation_Ukrainian'], config, original_language='uk')
-
     df_word_freq.drop(columns=['id'], inplace=True)
-
-    # classify frequent words with dummy classifier (lookup dictionary)
     df_word_freq['Translation_Russian'] = df_word_freq['Translation_Russian'].str.lower().str.strip()
     df_word_freq['Translation_Ukrainian'] = df_word_freq['Translation_Ukrainian'].str.lower().str.strip()
     df_word_freq['ukr_or_rus'] = df_word_freq['Translation_Ukrainian'].apply(lambda x: only_roman_chars(str(x)))
     df_word_freq['text'] = np.where(df_word_freq['ukr_or_rus'], df_word_freq['Translation_Ukrainian'], df_word_freq['Translation_Russian'])
     df_word_freq['text'] = df_word_freq['text'].str.replace('_ _', '')
     df_word_freq['text'] = df_word_freq['text'].str.replace('__', '')
+    
+    # remove stopwords
+    stopwords = ['across', 'apart', 'appropriate', 'available', 'available', 'awfully', 'beginning', 'begins', 'begin',
+                 'came', 'edu', 'eight', 'end', 'ending', 'fifth', 'five', 'help', 'home', 'how', 'how', "how's", 'last',
+                 'looking', 'name', 'near', 'need', 'needs', 'next', 'once', 'one', 'two', 'twice', 'three', 'four',
+                 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero', 'own', 'promptly', 'second', 'sent', 'stop',
+                 'suggest', 'tell', 'un', 'went', 'what', 'where', 'when', 'why', 'how', "what's", "when's", "where's",
+                 "which", 'while', "who's", 'whom', "why's", 'wish', 'wonder']
+    df_word_freq = df_word_freq[~df_word_freq['text'].isin(stopwords)]
+    
+    # classify frequent words with dummy classifier (lookup dictionary)
     df_class_wordfreq = pd.read_csv('../config/wordfreq_clean.csv')
     labels = df_class_wordfreq['label'].unique()
     for label in labels:
