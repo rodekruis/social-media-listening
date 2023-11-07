@@ -390,6 +390,19 @@ def parse_telegram(config):
             "id",
             sm_code,
             config)
+    
+    # update message_count
+    name = f"{config['country-code']}_TL_membercount_{start_date}_{end_date}"
+    os.makedirs(f"./telegram", exist_ok=True)
+    tweets_path = f"./telegram/{name}_latest.csv"
+    if not os.path.exists(tweets_path):
+        blob_client = get_blob_service_client(f'telegram/{name}_latest.csv', config)
+        with open(tweets_path, "wb") as download_file:
+            download_file.write(blob_client.download_blob().readall())
+    df_membercount = pd.read_csv(tweets_path)
+    for ix, row in df_membercount.iterrows():
+        df_membercount.at[ix, 'message_count'] = len(df_messages[df_messages['source'] == row['source']])
+    save_data(name, "telegram", df_membercount, "id", "TL", config)
 
     return f"./telegram/{config['country-code']}_{sm_code}_messagesprocessed_all.csv"
 
