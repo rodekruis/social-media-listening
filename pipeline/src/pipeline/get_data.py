@@ -376,7 +376,6 @@ async def scrape_messages(telegram_client, telegram_channels, start_date, end_da
                 wait_time = 5
             ):
                 reply = None
-                print('message.text: ', message.text)
                 if message.text:
                     df_messages = arrange_telegram_messages(df_messages, message, reply, channel)
                 if channel_entity.broadcast and message.post and message.replies:
