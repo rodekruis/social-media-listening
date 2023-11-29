@@ -2,8 +2,11 @@ import pytest
 import logging
 from smm.extract import Extract
 from smm.secrets import Secrets
-from smm.message import Message
 from datetime import datetime, timedelta
+
+# For opening a new sync loop if needed
+# import nest_asyncio
+# nest_asyncio.apply()
 
 # Get logger
 logger = logging.getLogger()
@@ -14,22 +17,8 @@ test_secrets = Secrets(path_or_url="credentials/credentials_test.json", source="
 test_extractor = Extract(source="telegram",
                          secrets=test_secrets)
 
-test_extractor.get_data(channels=["t.me/UAinplovdiv"],
-                        end_date=datetime.today()-timedelta(days=1))
+messages = test_extractor.get_data(channels=["t.me/dopomogaukraini"],
+                                   start_date=datetime.today()-timedelta(days=1))
 
 
-
-
-
-
-
-
-# # Initialize test message
-# template_message = Message(
-#     id_=0,
-#     datetime_=datetime.now(),
-#     datetime_scraped_=datetime.now(),
-#     country="NLD",
-#     source="Twitter",
-#     text="Hello world!")
 

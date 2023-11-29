@@ -13,7 +13,7 @@ import logging
 import asyncio
 
 
-supported_sources = ["twitter", "kobo", "telegram"]
+supported_sources = ["telegram"]#"twitter", "kobo", 
 
 
 class SocialMediaSource:
@@ -36,13 +36,13 @@ class SocialMediaSource:
             self.secrets = secrets
             return self.secrets
 
-    def check_secrets(self):
-        #TODO check that right secrets are filled for data source
-        # here you check if all storage-specific secrets are present
-        try:
-            db_secret = self.secrets('azure-database-secret') # TODO change name of secrets to one needed in this script
-        except ValueError:
-            raise ValueError('Secrets for storage not found!')
+    # def check_secrets(self):
+    #     #TODO check that right secrets are filled for data source
+    #     # here you check if all storage-specific secrets are present
+    #     try:
+    #         db_secret = self.secrets('azure-database-secret') # TODO change name of secrets to one needed in this script
+    #     except ValueError:
+    #         raise ValueError('Secrets for storage not found!')
 
 
 class Extract:
@@ -68,8 +68,8 @@ class Extract:
                  pages=None,
                  store_temp=True):
         
-        self.start_date = start_date
-        self.end_date = end_date
+        self.start_date = start_date.date()
+        self.end_date = end_date.date()
         self.queries = queries
         self.users = users
         self.channels = channels
@@ -191,48 +191,38 @@ class Extract:
 
 
     def get_data_telegram(self):
-        # Set timmer to avoid scraping for too long
         telegram_client = TelegramClient(
             StringSession(self.source.secrets.SESSION_STRING),
             self.source.secrets.API_ID,
             self.source.secrets.API_HASH
         )
-        # telegram_client.connect()
-        # logging.info("Telegram client connected")
-
-        # all_messages = []
-        # df_messages = pd.DataFrame()
 
         loop = asyncio.get_event_loop()
         all_messages = loop.run_until_complete(
             self._scrape_messages(telegram_client,
                                 self.channels, 
-                                self.start_date, 
-                                self.end_date)
+                                self.start_date)
                                 )
-
         telegram_client.disconnect()
 
         # drop duplicates
-        df_messages = pd.DataFrame(all_messages).reset_index(inplace=True)
-        print('df_messages: ', df_messages)
-        df_messages['datetime'] = pd.to_datetime(df_messages['datetime']).dt.strftime('%Y-%m-%d')
-        df_messages = df_messages.drop_duplicates(subset=['id'])
-        all_messages = df_messages.to_dict("records")
+        all_messages = self._deduplicate(all_messages)
 
         # save temp
+        df_messages = pd.DataFrame([x.to_dict() for x in all_messages])
         if self.store_temp:
             self._save_temp(df_messages, 'messages')
 
         return all_messages
 
 
-    async def _scrape_messages(self, telegram_client, telegram_channels, start_date, end_date):
+    async def _scrape_messages(self, telegram_client, telegram_channels, start_date):
 
         await telegram_client.connect()
         logging.info("Telegram client connected")
 
-        time_limit = 60*45 # 45 min
+        # Set timmer to avoid scraping for too long
+        time_limit = 60*45 # = 45 min
         time_start = time.time()
         all_messages = []
 
@@ -242,18 +232,16 @@ class Extract:
                 logging.info(f"getting in telegram channel {channel}")
                 # try:
                 channel_entity = await telegram_client.get_entity(channel)
-                # channel_full_info = await telegram_client(
-                #     GetFullChannelRequest(channel=channel_entity))
                 # scrape posts
                 replied_post_id = []
                 async for raw_message in telegram_client.iter_messages(
                     channel_entity,
-                    offset_date = end_date,
+                    offset_date = start_date,
                     reverse = True,
                     wait_time = 5
                 ):
                     reply = None
-                    message = Message.from_telegram(raw_message)
+                    message = self._from_telegram(raw_message)
                     all_messages.append(message)
                     if channel_entity.broadcast and raw_message.post and raw_message.replies:
                         replied_post_id.append(raw_message.id)
@@ -263,7 +251,7 @@ class Extract:
                         try:
                             async for raw_reply in telegram_client.iter_messages(
                                 channel_entity,
-                                offset_date = end_date,
+                                offset_date = start_date,
                                 reverse = True,
                                 reply_to = post_id,
                                 wait_time = 5
@@ -281,18 +269,45 @@ class Extract:
                     else:
                         time.sleep(10)
                         continue
-                # except Exception as e:
-                #     logging.info(f"Unable to get in telegram channel {channel}: {e}")
-                #     break
         
         await telegram_client.disconnect()
 
         return all_messages
 
 
+    def _from_telegram(self, message_entity):
+        if not message_entity.reply_to:
+            reply_ = False
+            reply_to_ = None
+        else:
+            reply_ = True
+            reply_to_ = message_entity.reply_to.reply_to_msg_id
+        return Message(
+            id_ = message_entity.id,
+            datetime_ = message_entity.date,
+            datetime_scraped_ = datetime.today(),
+            country = None,
+            source = "Telegram",
+            group = message_entity.peer_id.channel_id,
+            text = message_entity.message,
+            reply = reply_,
+            reply_to = reply_to_
+            )
+
+
+    def _deduplicate(self, object_list):
+        seen = set()
+        uniqueidlist = []
+        for obj in object_list:
+            if obj.id_ not in seen:
+                seen.add(obj.id_)
+                uniqueidlist.append(obj)
+        return uniqueidlist
+
+
     def _save_temp(self, df, dataname):
         # save temp
         if not os.path.exists('./temp'):
             os.mkdir('./temp')
-        filename = f'./temp/{self.source}_{dataname}_{self.end_date}_{self.start_date}.csv'
+        filename = f'./temp/{self.source.name}_{dataname}_{self.start_date}_{self.end_date}.csv'
         df.to_csv(filename, index=False)
