@@ -38,10 +38,16 @@ class Message:
         self.reply_to = reply_to
         if translations is None:
             self.translations = []
+        else:
+            self.translations = translations
         if info is None:
             self.info = {}
+        else:
+            self.info = info
         if classifications is None:
             self.classifications = []
+        else:
+            self.classifications = classifications
 
     # def from_twitter(self, dict_):
     #     self.id = dict_["id"]
@@ -120,8 +126,10 @@ class Message:
 
     def to_dict(self):
         return {
-            'id': self.id_,
-            'datetime': self.datetime_,
+            'id_': self.id_,
+            'datetime_': self.datetime_,
+            'datetime_scraped_': self.datetime_scraped_,
+            'country': self.country,
             'source': self.source,
             'group': self.group,
             'text': self.text,
@@ -131,4 +139,3 @@ class Message:
             'info': self.info,
             'classifications': self.classifications
         }
-
