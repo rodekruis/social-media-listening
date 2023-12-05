@@ -593,10 +593,10 @@ def get_word_frequency(df_tweets, text_column, sm_code, start_date, end_date, co
         df_col = df_word_freq[df_word_freq[col] == 'x']
         count_cat = df_col['Frequency'].sum()
         words_cat = df_col['Translation_Ukrainian'].values.tolist()
-        words_cat_deduplicated = set(words_cat)
+        seen = set()
+        words_cat_deduplicated = sorted([x for x in words_cat if x not in seen and not seen.add(x)])
         df_cat.loc[len(df_cat)] = [col, count_cat, words_cat_deduplicated]
     df_cat = df_cat.sort_values(by='frequency', ascending=False)
-    print('df_cat: ', df_cat)
     
     cat_count_filename = f'{config["country-code"]}_{sm_code}_categorycounts_{start_date}_{end_date}.csv'
     cat_count_filepath = os.path.join(word_freq_path, cat_count_filename)
