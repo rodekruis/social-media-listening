@@ -7,22 +7,21 @@ import pyodbc
 import sqlalchemy as db
 import urllib
 import ast
+import argilla as rg
+import numpy as np
 from smm.secrets import Secrets
 from smm.message import Message
 
 supported_storages = ["local", "Azure SQL Database", "Azure Blob Storage"]
 
 
-class Storage:
-    """
-    input/output data storage
-    """
-    # TODO: Do we need this?
-    def __init__(self, name=None):
-        if name is None:
-            self.name = "local"
-        else:
-            self.name = name
+def _messages_to_df(messages):
+    df_messages = pd.DataFrame.from_records([msg.to_dict() for msg in messages])
+    df_messages["info"] = df_messages["info"].apply(lambda x: str(x))
+    df_messages["translations"] = df_messages["translations"].apply(lambda x: str(x))
+    df_messages["classifications"] = df_messages["classifications"].apply(lambda x: str(x))
+    df_messages["datetime_"] = df_messages["datetime_"].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
+    return df_messages
 
 
 class Load:
@@ -31,20 +30,20 @@ class Load:
     """
 
     def __init__(self, storage_name=None, secrets: Secrets = None):
-        self.storage = self.set_storage(storage_name)
+        self.storage = storage_name
         self.secrets = self.set_secrets(secrets)
 
     def set_storage(self, storage_name=None):
         if storage_name is not None:
-            if hasattr(self, "storage"):
-                if self.storage.name == storage_name:
-                    logging.info(f"Storage already set to {storage_name}")
-            else:
-                if storage_name not in supported_storages:
-                    raise ValueError(f"Storage {storage_name} is not supported."
-                                     f"Supported storages are {supported_storages}")
-                else:
-                    return Storage(storage_name)
+            if storage_name not in supported_storages:
+                raise ValueError(f"Storage {storage_name} is not supported."
+                                 f"Supported storages are {supported_storages}")
+
+            if hasattr(self, "storage") and self.storage == storage_name:
+                logging.info(f"Storage already set to {storage_name}")
+                return
+
+            self.storage = storage_name
         else:
             raise ValueError(f"Storage not specified; provide one of {supported_storages}")
 
@@ -53,7 +52,7 @@ class Load:
             raise TypeError(f"invalid format of secrets, use secrets.Secrets")
 
         missing_secrets = []
-        if self.storage.name == "Azure SQL Database":
+        if self.storage == "Azure SQL Database":
             missing_secrets = secrets.check_secrets(
                 [
                     "sql_db_server",
@@ -63,7 +62,7 @@ class Load:
                     "table_name"
                 ]
             )
-        if self.storage.name == "Azure Blob Storage":
+        if self.storage == "Azure Blob Storage":
             missing_secrets = secrets.check_secrets(
                 [
                     "container",
@@ -72,77 +71,35 @@ class Load:
             )
 
         if missing_secrets:
-            raise Exception(f"Missing secret(s) {missing_secrets} for storage of type {self.storage.name}")
+            raise Exception(f"Missing secret(s) {missing_secrets} for storage of type {self.storage}")
         else:
             return secrets
 
-    def save_messages(self, messages, directory=None, filename=None):
-
-        # Read messages to dataframe
-        df_messages = pd.DataFrame.from_records([msg.to_dict() for msg in messages])
-        df_messages["info"] = df_messages["info"].apply(lambda x: str(x))
-        df_messages["translations"] = df_messages["translations"].apply(lambda x: str(x))
-        df_messages["classifications"] = df_messages["classifications"].apply(lambda x: str(x))
-        df_messages["datetime_"] = df_messages["datetime_"].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
-
-
-        if self.storage.name == "local":
-            # save locally
-            os.makedirs(f"./{directory}", exist_ok=True)
-            messages_path = f"./{directory}/{filename}"
-            df_messages.to_csv(messages_path, index=False, encoding="utf-8")
-            logging.info(f"Successfully saved messages at {messages_path}")
-
-        elif self.storage.name == "Azure Blob Storage":
-            # save locally
-            os.makedirs(f"./{directory}", exist_ok=True)
-            messages_path = f"./{directory}/{filename}"
-            df_messages.to_csv(messages_path, index=False, encoding="utf-8")
-
-            # upload local file to AZ
-            directory_blob = f"{directory}/{filename}"
-            try:
-                self.upload_blob(messages_path, directory_blob)
-            except Exception as e:
-                logging.error(f"Failed uploading to Azure Blob Service: {e}")
-
-        elif self.storage.name == "Azure SQL Database":
-            # save to Azure SQL Database
-            try:
-                self.save_to_db(df_messages)
-            except Exception as e:
-                logging.error(f"Failed storing in Azure SQL Database: {e}")
-
-        else:
-            raise ValueError(f"storage {self.storage.name} is not supported."
-                             f"Supported storages are {supported_storages}")
-
     def save_wordfrequencies(self, frequencies, directory, filename):
 
-        if self.storage.name == "local":
+        if self.storage == "local":
             # save locally
-            os.makedirs(f"./{directory}", exist_ok=True)
+            os.makedirs(f"{directory}", exist_ok=True)
             frequencies_path = f"./{directory}/{filename}.csv"
             frequencies.to_csv(frequencies_path, index=False, encoding="utf-8")
         else:
-            raise ValueError(f"storage {self.storage.name} is not supported."
+            raise ValueError(f"storage {self.storage} is not supported."
                              f"Supported storages are {supported_storages}")
 
     def get_messages(self,
-                     directory=None,
-                     filename=None,
+                     local_path=None,
+                     blob_path=None,
                      start_date=None,
                      end_date=None,
                      country=None,
                      source=None
                      ):
 
-        if self.storage.name == "local":
+        if self.storage == "local":
             # load locally
-            messages_path = f"./{directory}/{filename}"
-            df_messages = pd.read_csv(messages_path)
-            
-        elif self.storage.name == "Azure SQL Database":
+            df_messages = pd.read_csv(local_path)
+
+        elif self.storage == "Azure SQL Database":
             # load from Azure SQL Database
             if start_date is None or end_date is None:
                 raise Exception(f"Please provide an start and end date for reading from Azure SQL Database")
@@ -150,68 +107,168 @@ class Load:
                 raise Exception(f"Please provide a country for reading from Azure SQL Database")
             if source is None:
                 raise Exception(f"Please provide a source for reading from Azure SQL Database")
-            df_messages = self.read_db(start_date, end_date, country, source)
-            
-        elif self.storage.name == "Azure Blob Storage":
-            messages_path = f"./{directory}/{filename}"
+            df_messages = self._read_db(start_date, end_date, country, source)
 
-            # load from Azure Blob Storage
-            blob_client = self.get_blob_service_client(messages_path)
-            with open(messages_path, "wb") as download_file:
-                download_file.write(blob_client.download_blob().readall())
+        elif self.storage == "Azure Blob Storage":
+            local_directory = local_path[:local_path.rfind("/")]
+            os.makedirs(local_directory, exist_ok=True)
 
-            df_messages = pd.read_csv(directory)
-            
+            try:
+                self._download_blob(local_path, blob_path)
+            except Exception as e:
+                logging.error(f"Failed downloading from Azure Blob Service: {e}")
+
+            df_messages = pd.read_csv(local_path)
+
         else:
-            raise ValueError(f"storage {self.storage.name} is not supported."
+            raise ValueError(f"storage {self.storage} is not supported."
                              f"Supported storages are {supported_storages}")
 
         # Convert dataframe of messages to list of message objects
         messages = []
         for idx, row in df_messages.iterrows():
-            # Process
-            classifications = None
+
+            # Initiate Message objects with mandatory fields
+            try:
+                message = Message(
+                    row['id_'],
+                    row['datetime_'],
+                    row['datetime_scraped_'],
+                    row['country'],
+                    row['source'],
+                    row['text'],
+                )
+            except Exception:
+                raise ValueError("Mandatory fields of message missing")
+
+            # Add optional fields
+            if row['group']:
+                message.group = row['group']
+
+            if row['reply']:
+                message.reply = row['reply']
+
+            if row['reply_to']:
+                message.reply_to = row['reply_to']
+
             if row['classifications']:
-                classifications = ast.literal_eval(row['classifications'])
+                message.classifications = ast.literal_eval(row['classifications'])
 
-            translations = None
             if row['translations']:
-                translations = ast.literal_eval(row['translations'])
+                message.translations = ast.literal_eval(row['translations'])
 
-            info = None
             if row['info']:
-                info = ast.literal_eval(row['info'])
+                message.info = ast.literal_eval(row['info'])
 
-            # Initiate Message objects
-            message = Message(
-                row['id_'],
-                row['datetime_'],
-                row['datetime_scraped_'],
-                row['country'],
-                row['source'],
-                row['text'],
-                row['group'],
-                row['reply'],
-                row['reply_to'],
-                translations,
-                info,
-                classifications
-            )
             messages.append(message)
 
         return messages
 
-    def save_to_db(self, data):
+    def save_messages(self, messages, local_path=None, blob_path=None):
+
+        # Read messages to dataframe
+        df_messages = _messages_to_df(messages)
+
+        if self.storage == "local":
+            # save locally
+            local_directory = local_path[:local_path.rfind("/")]
+            os.makedirs(local_directory, exist_ok=True)
+            df_messages.to_csv(local_path, index=False, encoding="utf-8")
+            logging.info(f"Successfully saved messages at {local_path}")
+
+        elif self.storage == "Azure Blob Storage":
+            # save locally
+            local_directory = local_path[:local_path.rfind("/")]
+            os.makedirs(local_directory, exist_ok=True)
+            df_messages.to_csv(local_path, index=False, encoding="utf-8")
+
+            try:
+                self._upload_blob(local_path, blob_path)
+            except Exception as e:
+                logging.error(f"Failed uploading to Azure Blob Service: {e}")
+
+        elif self.storage == "Azure SQL Database":
+            # save to Azure SQL Database
+            try:
+                self._save_to_db(df_messages)
+            except Exception as e:
+                logging.error(f"Failed storing in Azure SQL Database: {e}")
+
+        else:
+            raise ValueError(f"storage {self.storage} is not supported."
+                             f"Supported storages are {supported_storages}")
+
+    def push_to_argilla(self, messages, tags=None):
+        # init argilla
+        rg.init(
+            api_url=self.secrets.get_secret("argilla_api_url"),
+            api_key=self.secrets.get_secret("argilla_api_key"),
+            workspace=self.secrets.get_secret("argilla_workspace")
+        )
+
+        topics = [next(iter(classification)) for message in messages for classification in message.classifications]
+        topics = set(topics)
+
+        records = []
+        for ix, message in enumerate(messages):
+            # Set predictions
+            if not message.classifications:
+                prediction = [(topic, 0.) for topic in topics]
+            else:
+                predicted_topics = [next(iter(classification)) for classification in message.classifications]
+                prediction = [(next(iter(topic)), next(iter(topic.values()))) for topic in message.classifications]
+                prediction += [(topic, 0.) for topic in topics if topic not in predicted_topics]
+                prediction.sort()
+
+            # Set translations
+            inputs = {'Original message': message.text}
+            if message.translations:
+                for translation in message.translations:
+                    inputs[f"Translation ({next(iter(translation))})"] = next(iter(translation.values()))
+            inputs['Message number'] = ix+1
+
+            records.append(
+                rg.TextClassificationRecord(
+                    inputs=inputs,
+                    prediction=prediction,
+                    prediction_agent='sml-model-0.0.1',
+                    multi_label=True,
+                    metadata={
+                        'channel': message.group,
+                        'source': message.source,
+                        'to read': np.random.choice(['yes', 'no'], size=1, p=[0.25, 0.75])[0],
+                        'number': ix+1
+                    },
+                    event_timestamp=message.datetime_
+                ),
+            )
+
+        dataset = rg.DatasetForTextClassification(records)
+
+        settings = rg.TextClassificationSettings(label_schema=topics)
+        rg.configure_dataset_settings(name=f"{tags['country']}-{tags['scrape']}", settings=settings)
+
+        # log the dataset
+        rg.log(
+            dataset,
+            name=f"{tags['country']}-{tags['scrape']}",
+            workspace=self.secrets.get_secret("argilla_workspace"),
+            tags=tags
+        )
+
+    def _save_to_db(self, data):
         data_final = self._prepare_messages_for_db(data)
         current_datetime = datetime.now()
         db_table_name = self.secrets.get_secret("table_name")
+        db_schema = self.secrets.get_secret("table_schema")
         if not data_final.empty:
-            # Make connection to Azure database
-            engine, connection = self.connect_to_db()
-
-            messages_table = db.Table('messages_new', db.MetaData(schema="smm"), autoload=True, autoload_with=engine)
-
             try:
+                # Make connection to Azure database
+                engine, connection = self._connect_to_db()
+
+                messages_table = db.Table(db_table_name, db.MetaData(schema=db_schema), autoload=True,
+                                          autoload_with=engine)
+
                 for idx, row in data_final.iterrows():
                     connection.execute(
                         db.insert(messages_table),
@@ -244,28 +301,33 @@ class Load:
         else:
             logging.info(f"All scraped messages already existing in table {db_table_name}")
 
-    def read_db(self, start_date, end_date, country, source):
+    def _read_db(self, start_date, end_date, country, source):
         # Connect to db
-        db_table_name = self.secrets.get_secret("table_name")  
-        engine, connection = self.connect_to_db()
+        db_table_name = self.secrets.get_secret("table_name")
+        db_schema = self.secrets.get_secret("table_schema")
 
-        messages_table = db.Table('messages_new', db.MetaData(schema="smm"), autoload=True,  autoload_with=engine)
-
-        # prepare query
-        query = messages_table.select().where(
-            db.and_(
-                messages_table.columns.source == source,
-                messages_table.columns.country == country,
-                messages_table.columns.datetime_.between(start_date, end_date)
-            )
-        )
         try:
+            engine, connection = self._connect_to_db()
+
+            messages_table = db.Table(db_table_name, db.MetaData(schema=db_schema), autoload=True, autoload_with=engine)
+
+            # prepare query
+            query = messages_table.select().where(
+                db.and_(
+                    messages_table.columns.source == source,
+                    messages_table.columns.country == country,
+                    messages_table.columns.datetime_.between(start_date, end_date)
+                )
+            )
+
             output = connection.execute(query)
             results = output.fetchall()
             df_messages = pd.DataFrame(results)
             df_messages.columns = results[0].keys()
             logging.info(
-                f"Successfully retrieved {len(df_messages)} {source} messages \n from {start_date} to {end_date} from table {db_table_name}")
+                f"Successfully retrieved {len(df_messages)} {source} messages"
+                f"from {start_date} to {end_date} from table {db_table_name}"
+            )
         except Exception as e:
             df_messages = None
             logging.error(f"Failed to retrieve SQL table {db_table_name}: {e}")
@@ -292,7 +354,7 @@ class Load:
         country = data['country'].unique()[0]
         source = data['source'].unique()[0]
 
-        data_in_db = self.read_db(start_date, end_date, country, source)
+        data_in_db = self._read_db(start_date, end_date, country, source)
 
         if data_in_db is not None and not data_in_db.empty:
             # Make sure format of new data and data in database are the same
@@ -321,23 +383,25 @@ class Load:
 
         return data_final
 
-    def get_blob_service_client(self, blob_path):
+    def _get_blob_service_client(self, blob_path):
         blob_service_client = BlobServiceClient.from_connection_string(self.secrets.get_secret("connection_string"))
         container = self.secrets.get_secret("container")
         return blob_service_client.get_blob_client(container=container, blob=blob_path)
 
-    def upload_blob(self, file_dir_local, file_dir_blob):
-        blob_client = self.get_blob_service_client(file_dir_blob)
-        with open(file_dir_local, "rb") as upload_file:
+    def _upload_blob(self, local_path, file_dir_blob):
+        blob_client = self._get_blob_service_client(file_dir_blob)
+        with open(local_path, "rb") as upload_file:
             blob_client.upload_blob(upload_file, overwrite=True)
         logging.info("Successfully uploaded to Azure Blob Storage")
 
-    def download_blob(self, blob_path):
-        blob_client = self.get_blob_service_client(blob_path)
-        with open(blob_path, "wb") as download_file:
-            download_file.write(blob_client.download_blob().readall())
+    def _download_blob(self, local_path, blob_path):
+        blob_client = self._get_blob_service_client(blob_path)
 
-    def connect_to_db(self):
+        with open(local_path, "wb") as download_file:
+            download_file.write(blob_client.download_blob().readall())
+        logging.info("Successfully downloaded from Azure Blob Storage")
+
+    def _connect_to_db(self):
         # Connect to db
         try:
             driver = '{ODBC Driver 18 for SQL Server}'
