@@ -47,6 +47,7 @@ import logging
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import datetime
+import argilla as rg
 english_words = set(nltk.corpus.words.words())
 latin_letters = {}
 
@@ -897,41 +898,95 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
     # check if keywords are present
     df_tweets['keywords'] = None
     df_tweets[text_raw] = df_tweets[text_raw].str.lower()
-    labels = [label.lower().strip() for label in labels]
     for idx, row in df_tweets.iterrows():
         for label in labels:
-            if label in row[text_raw]:
+            if label.lower().strip() in row[text_raw]:
                 df_tweets.at[idx, 'keywords'] = label
 
         # # score all messages
     # df_results = pd.DataFrame(columns=labels)
     # df_results[text_column] = df_tweets[text_column]
     # df_results = df_results[df_results[text_column].str.len() > 10]  # filter short messages
-    #
-    # # if config["push-to-argilla"]:
-    # #     # initiate argilla connection
-    # #     rg.init(api_url="https://redcross-104616782.argilla.io/", api_key=os.environ["ARGILLA_REDCROSS_API_KEY"],
-    # #             workspace="red_cross")
-    #
-    # for idx, row in tqdm(df_results.iterrows(), total=df_results.shape[0]):
-    #     message = row[text_column]
-    #     result = request_classification(message, labels, config['text-classification-url'])
-    #
-    #     # if config["push-to-argilla"]:
-    #     #     # push result to argilla
-    #     #     record = rg.TextClassificationRecord(
-    #     #         text=message,
-    #     #         prediction=list(zip(result['labels'], result['scores'])),
-    #     #         prediction_agent="zero-shot",
-    #     #         event_timestamp=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat(),
-    #     #         multi_label=True
-    #     #     )
-    #     #     rg.log(record, name="redcross-smm-subtopic-multi-label")
-    #
-    #     for label, score in zip(result['labels'], result['scores']):
-    #         df_results.at[idx, label] = score
-    #         df_tweets.at[idx, f'{label}_score'] = score  # copy scores back into original dataframe
-    #
+    if config["push-to-argilla"]:
+        # add to read column
+        df_tweets['toRead'] = 'no'
+        if len(df_tweets) > 2000:
+            df_to_read = df_tweets(n=2000, random_state=1)
+            df_tweets.loc[df_tweets.index.isin(df_to_read.index.to_list()), 'toRead'] = 'yes'
+        else:
+            df_tweets['toRead'] = 'yes'
+
+        # get secrets
+        argilla_secret = get_secret_keyvault("argilla-secrets", config)
+        argilla_secret = json.loads(argilla_secret)
+        # initiate argilla connection
+        rg.init(
+            api_url=argilla_secret["url"],
+            api_key=argilla_secret["api-key"],
+            workspace=argilla_secret["workspace"]
+        )
+
+        records = []
+        topics = [
+            "ANOMALY", "ARMY", "CHILDREN", "CONNECTIVITY", "CONNECTWITHREDCROSS", "FOOD", "GOODSSERVICES", "HEALTH",
+            "INCLUSIONCVA", "LEGAL", "MONEY/BANKING", "NFINONFOODITEMS", "OTHERPROGRAMSOTHERNGOS", "PARCEL",
+            "PAYMENTCVA", "PETS", "PMER/NEWPROGRAMOPERTUNITIES", "PROGRAMINFO", "PROGRAMINFORMATION", "PSSRFL",
+            "REGISTRATIONCVA", "SENTIMENT/FEEDBACK", "SHELTER", "TRANSLATION/LANGUAGE", "TRANSPORT/CAR",
+            "TRANSPORT/MOVEMENT", "WASH", "WORK/JOBS"
+        ]
+        argilla_dataset_name = f"{config['country-code'].lower()}-{df_tweets['date'].min()}-{df_tweets['date'].max()}"
+
+        for idx, message in tqdm(df_tweets.iterrows(), total=df_tweets.shape[0]):
+            # Set predictions
+            if 'predictions' not in output:
+                prediction = [(topic, 0.) for topic in topics]
+            else:
+                predicted_topics = [prediction['label'] for prediction in output['predictions']]
+                prediction = [(prediction['label'], prediction['probability']) for prediction in output['predictions']]
+                prediction += [(topic, 0.) for topic in topics if topic not in predicted_topics]
+                prediction.sort()
+
+            # Set text
+            inputs = {
+                'Original message': message[text_raw],
+                'Translated message': message[text_processed]
+            }
+
+            # push result to argilla
+            records.append(
+                rg.TextClassificationRecord(
+                    inputs=inputs,
+                    prediction=prediction,
+                    prediction_agent="sml-model-0.0.1",
+                    multi_label=True,
+                    metadata={
+                        'channel': message.source,
+                        'source': "Telegram",
+                        'to read': message.toRead,
+                        'number': idx + 1
+                    },
+                    event_timestamp=message.datetime
+                )
+            )
+
+        dataset = rg.DatasetForTextClassification(records)
+
+        settings = rg.TextClassificationSettings(label_schema=topics)
+        rg.configure_dataset_settings(
+            name=argilla_dataset_name,
+            settings=settings
+        )
+
+        # log the dataset
+        rg.log(
+            dataset,
+            name=argilla_dataset_name,
+            workspace=argilla_secret["workspace"]
+        )
+    # for label, score in zip(result['labels'], result['scores']):
+    #     df_results.at[idx, label] = score
+    #     df_tweets.at[idx, f'{label}_score'] = score  # copy scores back into original dataframe
+
     # # select messages with highest scores per label
     # df_classified_text = pd.DataFrame()
     # for label in labels:

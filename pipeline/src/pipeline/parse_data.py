@@ -369,10 +369,10 @@ def parse_telegram(config):
 
     if config["classify-text"]:
         if "labels" in os.environ.keys():
-            if isinstance(os.environ["LABELS"], list):
-                labels = os.environ["LABELS"]
+            if isinstance(os.environ["labels"], list):
+                labels = os.environ["labels"]
             else:
-                labels = list(os.environ["LABELS"])
+                labels = os.environ["labels"].split(",")
         else:
             labels = ['dummy']
         df_messages, df_classified = classify_text(df_messages, 'text_post', 'text_combined_en', labels, config)
