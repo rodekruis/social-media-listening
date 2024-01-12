@@ -5,6 +5,7 @@
 *.sublime-workspace
 
 # Configuration, secrets, etc:
+credentials/*
 .env
 env
 
@@ -21,8 +22,8 @@ logs
 npm-debug.log*
 .npm
 
-# Secrets
-credentials/*
+# Data
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

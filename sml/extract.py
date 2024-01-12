@@ -1,5 +1,5 @@
-from smm.message import Message
-from smm.secrets import Secrets
+from sml.message import Message
+from sml.secrets import Secrets
 import os
 from datetime import datetime, timedelta
 import time
@@ -12,22 +12,22 @@ import requests
 import logging
 import asyncio
 
-
-supported_sources = ["telegram"]#"twitter", "kobo", 
+supported_sources = ["telegram"]  # "twitter", "kobo",
 
 
 class SocialMediaSource:
     """
     social media source
     """
-    def __init__(self, name=None, secrets: Secrets=None):
+    
+    def __init__(self, name=None, secrets: Secrets = None):
         if name not in supported_sources:
             raise ValueError(f"Source {name} is not supported."
                              f"Supported sources are {', '.join(supported_sources)}")
         else:
             self.name = name
         self.secrets = self.set_secrets(secrets)
-
+    
     def set_secrets(self, secrets):
         if not isinstance(secrets, Secrets):
             raise TypeError(f"invalid format of secrets, use secrets.Secrets")
@@ -35,7 +35,7 @@ class SocialMediaSource:
         else:
             self.secrets = secrets
             return self.secrets
-
+    
     # def check_secrets(self):
     #     #TODO check that right secrets are filled for data source
     #     # here you check if all storage-specific secrets are present
@@ -49,19 +49,27 @@ class Extract:
     """
     extract data from social media
     """
-
-    def __init__(self, source=None, secrets: Secrets=None):
-        self.set_source(source, secrets)
-
-    def set_source(self, source, secrets):
+    
+    def __init__(self, source=None, secrets: Secrets = None):
         if source is not None:
             self.source = SocialMediaSource(source, secrets)
         else:
-            raise ValueError(f"Source not specified; provide one of {supported_sources}")
-
+            self.source = None
+        self.start_date = None
+        self.end_date = None
+        self.queries = None
+        self.users = None
+        self.channels = None
+        self.pages = None
+        self.store_temp = None
+    
+    def set_source(self, source, secrets):
+        self.source = SocialMediaSource(source, secrets)
+        return self
+    
     def get_data(self,
                  start_date=datetime.today(),
-                 end_date=datetime.today()-timedelta(days=7),
+                 end_date=datetime.today() - timedelta(days=7),
                  queries=None,
                  users=None,
                  channels=None,
@@ -75,7 +83,7 @@ class Extract:
         self.channels = channels
         self.pages = pages
         self.store_temp = store_temp
-
+        
         if self.source.name == "twitter":
             logging.info('Getting Twitter data')
             messages = self.get_data_twitter()
@@ -88,29 +96,28 @@ class Extract:
         else:
             raise ValueError(f"source {self.source.name} is not supported."
                              f"Supported sources are {', '.join(supported_sources)}")
-
+        
         return messages
-
-
+    
     def get_data_twitter(self):
         auth = tweepy.OAuthHandler(
-            self.source.secrets['API_CONSUMER_KEY'], 
+            self.source.secrets['API_CONSUMER_KEY'],
             self.source.secrets['API_CONSUMER_SECRET']
-            )
+        )
         auth.set_access_token(
-            self.source.secrets['API_ACCESS_TOKEN'], 
+            self.source.secrets['API_ACCESS_TOKEN'],
             self.source.secrets['API_ACCESS_SECRET']
-            )
+        )
         api = tweepy.API(auth, wait_on_rate_limit=True)
         all_messages = []
-
+        
         # track individual twitter users
         if not self.users:
             tw_users = self.users
-
+            
             for userID in tw_users:
                 logging.info(f'Getting Twitter user: {userID}')
-
+                
                 tweets = api.user_timeline(screen_name=userID,
                                            count=200,
                                            include_rts=False,
@@ -134,7 +141,7 @@ class Extract:
                 for tweet in all_tweets:
                     message = Message.from_twitter(tweet)
                     all_messages.append(message)
-
+        
         # track specific queries
         if not self.queries:
             all_tweets = []
@@ -142,9 +149,9 @@ class Extract:
             for query in self.queries:
                 try:
                     for page in tweepy.Cursor(api.search_tweets,
-                                            q=query,
-                                            include_entities=True,
-                                            count=100).pages():
+                                              q=query,
+                                              include_entities=True,
+                                              count=100).pages():
                         try:
                             for tweet in page:
                                 all_tweets.append(tweet)
@@ -161,73 +168,70 @@ class Extract:
         df_messages = pd.DataFrame(all_messages)
         df_messages = df_messages.drop_duplicates(subset=['id'])
         all_messages = df_messages.to_dict("records")
-
+        
         # save temp
         if self.store_temp:
             self._save_temp(df_messages, 'tweets')
-
+        
         return all_messages
-
-
+    
     def get_data_kobo(self):
-        url = f'{self.kobo_api_url}{self.source.secrets["ASSET"]}/data.json' # kobo api url: https://kobonew.ifrc.org/api/v2/assets/
+        url = f'{self.kobo_api_url}{self.source.secrets["ASSET"]}/data.json'  # kobo api url: https://kobonew.ifrc.org/api/v2/assets/
         headers = {'Authorization': f'Token {self.source.secrets["TOKEN"]}'}
         data_request = requests.get(url,
                                     headers=headers)
         data = data_request.json()['results']
         df_form = pd.DataFrame(data)
-
+        
         all_messages = []
         for idx, row in df_form.iterrows():
             # TBI: update mapping df to list of dict
             message = Message.from_kobo(row)
             all_messages.append(message)
-
+        
         # save temp
         if self.store_temp:
             self._save_temp(df_form, 'form')
-
+        
         return all_messages
-
-
+    
     def get_data_telegram(self):
         telegram_client = TelegramClient(
-            StringSession(self.source.secrets.SESSION_STRING),
-            self.source.secrets.API_ID,
-            self.source.secrets.API_HASH
+            StringSession(self.source.secrets.get_secret('STRING_SESSION')),
+            self.source.secrets.get_secret('API_ID'),
+            self.source.secrets.get_secret('API_HASH')
         )
-
+        
         loop = asyncio.get_event_loop()
         all_messages = loop.run_until_complete(
             self._scrape_messages(telegram_client,
-                                self.channels, 
-                                self.start_date)
-                                )
+                                  self.channels,
+                                  self.start_date)
+        )
         telegram_client.disconnect()
-
+        
         # drop duplicates
         all_messages = self._deduplicate(all_messages)
-
+        
         # save temp
         df_messages = pd.DataFrame([x.to_dict() for x in all_messages])
         if self.store_temp:
             self._save_temp(df_messages, 'messages')
-
+        
         return all_messages
-
-
+    
     async def _scrape_messages(self, telegram_client, telegram_channels, start_date):
-
+        
         await telegram_client.connect()
         logging.info("Telegram client connected")
-
+        
         # Set timmer to avoid scraping for too long
-        time_limit = 60*45 # = 45 min
+        time_limit = 60 * 45  # = 45 min
         time_start = time.time()
         all_messages = []
-
+        
         async with telegram_client:
-
+            
             for channel in telegram_channels:
                 logging.info(f"getting in telegram channel {channel}")
                 # try:
@@ -235,10 +239,10 @@ class Extract:
                 # scrape posts
                 replied_post_id = []
                 async for raw_message in telegram_client.iter_messages(
-                    channel_entity,
-                    offset_date = start_date,
-                    reverse = True,
-                    wait_time = 5
+                        channel_entity,
+                        offset_date=start_date,
+                        reverse=True,
+                        wait_time=5
                 ):
                     reply = None
                     message = self._from_telegram(raw_message)
@@ -250,11 +254,11 @@ class Extract:
                     for post_id in replied_post_id:
                         try:
                             async for raw_reply in telegram_client.iter_messages(
-                                channel_entity,
-                                offset_date = start_date,
-                                reverse = True,
-                                reply_to = post_id,
-                                wait_time = 5
+                                    channel_entity,
+                                    offset_date=start_date,
+                                    reverse=True,
+                                    reply_to=post_id,
+                                    wait_time=5
                             ):
                                 reply = Message.from_telegram(raw_reply)
                                 all_messages.append(reply)
@@ -271,10 +275,9 @@ class Extract:
                         continue
         
         await telegram_client.disconnect()
-
+        
         return all_messages
-
-
+    
     def _from_telegram(self, message_entity):
         if not message_entity.reply_to:
             reply_ = False
@@ -283,18 +286,17 @@ class Extract:
             reply_ = True
             reply_to_ = message_entity.reply_to.reply_to_msg_id
         return Message(
-            id_ = message_entity.id,
-            datetime_ = message_entity.date,
-            datetime_scraped_ = datetime.today(),
-            country = None,
-            source = "Telegram",
-            group = message_entity.peer_id.channel_id,
-            text = message_entity.message,
-            reply = reply_,
-            reply_to = reply_to_
-            )
-
-
+            id_=message_entity.id,
+            datetime_=message_entity.date,
+            datetime_scraped_=datetime.today(),
+            country=None,
+            source="Telegram",
+            group=message_entity.peer_id.channel_id,
+            text=message_entity.message,
+            reply=reply_,
+            reply_to=reply_to_
+        )
+    
     def _deduplicate(self, object_list):
         seen = set()
         uniqueidlist = []
@@ -303,8 +305,7 @@ class Extract:
                 seen.add(obj.id_)
                 uniqueidlist.append(obj)
         return uniqueidlist
-
-
+    
     def _save_temp(self, df, dataname):
         # save temp
         if not os.path.exists('./temp'):

@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "sml"
+version = "0.0.1"
+authors = [
+  "Phuoc Phùng <pphung@redcross.nl>",
+  "Wessel de Jong <wdejong@redcross.nl>",
+  "Jacopo Margutti <jmargutti@redcross.nl>"
+]
+description = "Social Media Listening"
+readme = "README.md"
+repository = "https://github.com/rodekruis/social-media-listening"
+packages = [{include = "sml"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+argilla = "^1"
+azure-common = "*"
+azure-identity = "*"
+azure-keyvault-secrets = "*"
+azure-storage-blob = "*"
+click = "*"
+geopandas = "*"
+google-cloud-translate = "*"
+pandas = "*"
+pyodbc = "*"
+python-dotenv = "*"
+spacy = "*"
+SQLAlchemy = "*"
+stopwordsiso = "*"
+Telethon = "*"
+torch = "*"
+tqdm = "*"
+transformers = "*"
+tweepy = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

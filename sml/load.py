@@ -9,8 +9,8 @@ import urllib
 import ast
 import argilla as rg
 import numpy as np
-from smm.secrets import Secrets
-from smm.message import Message
+from sml.secrets import Secrets
+from sml.message import Message
 
 supported_storages = ["local", "Azure SQL Database", "Azure Blob Storage"]
 
@@ -30,10 +30,16 @@ class Load:
     """
 
     def __init__(self, storage_name=None, secrets: Secrets = None):
-        self.storage = storage_name
-        self.secrets = self.set_secrets(secrets)
+        if storage_name is not None:
+            self.storage = storage_name
+        else:
+            self.storage = None
+        if secrets is not None:
+            self.set_secrets(secrets)
+        else:
+            self.secrets = None
 
-    def set_storage(self, storage_name=None):
+    def set_storage(self, storage_name=None, secrets=None):
         if storage_name is not None:
             if storage_name not in supported_storages:
                 raise ValueError(f"Storage {storage_name} is not supported."
@@ -42,10 +48,12 @@ class Load:
             if hasattr(self, "storage") and self.storage == storage_name:
                 logging.info(f"Storage already set to {storage_name}")
                 return
-
             self.storage = storage_name
         else:
             raise ValueError(f"Storage not specified; provide one of {supported_storages}")
+        if secrets is not None:
+            self.set_secrets(secrets)
+        return self
 
     def set_secrets(self, secrets):
         if not isinstance(secrets, Secrets):
@@ -59,7 +67,8 @@ class Load:
                     "sql_db",
                     "sql_user",
                     "sql_password",
-                    "table_name"
+                    "table_name",
+                    "table_schema"
                 ]
             )
         if self.storage == "Azure Blob Storage":
@@ -69,11 +78,11 @@ class Load:
                     "connection_string"
                 ]
             )
-
         if missing_secrets:
             raise Exception(f"Missing secret(s) {missing_secrets} for storage of type {self.storage}")
         else:
-            return secrets
+            self.secrets = secrets
+            return self
 
     def save_wordfrequencies(self, frequencies, directory, filename):
 
@@ -266,8 +275,7 @@ class Load:
                 # Make connection to Azure database
                 engine, connection = self._connect_to_db()
 
-                messages_table = db.Table(db_table_name, db.MetaData(schema=db_schema), autoload=True,
-                                          autoload_with=engine)
+                messages_table = db.Table(db_table_name, db.MetaData(schema=db_schema), autoload_with=engine)
 
                 for idx, row in data_final.iterrows():
                     connection.execute(
@@ -308,8 +316,8 @@ class Load:
 
         try:
             engine, connection = self._connect_to_db()
-
-            messages_table = db.Table(db_table_name, db.MetaData(schema=db_schema), autoload=True, autoload_with=engine)
+            print(db_table_name, db_schema)
+            messages_table = db.Table(db_table_name, db.MetaData(schema=db_schema), autoload_with=engine)
 
             # prepare query
             query = messages_table.select().where(

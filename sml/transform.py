@@ -1,6 +1,6 @@
 import os.path
 from typing import Union
-from smm.message import Message
+from sml.message import Message
 import re
 import stopwordsiso
 import pandas as pd
@@ -15,8 +15,8 @@ import requests
 import uuid
 import spacy
 import geopandas as gpd
-from smm.secrets import Secrets
-from smm.context import Context
+from sml.secrets import Secrets
+from sml.context import Context
 supported_translators = ["HuggingFace", "Google", "Microsoft", "Custom"]
 supported_classifiers = ["HuggingFace", "Custom"]
 supported_anonymizers = ["anonymization-app"]

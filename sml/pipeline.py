@@ -1,15 +1,13 @@
-from smm.context import Context
-from smm.extract import Extract
-from smm.transform import Transform
-from smm.load import Load
-from smm.message import Message
-from smm.wordfreq import WordFrequency
+from sml.context import Context
+from sml.extract import Extract
+from sml.transform import Transform
+from sml.load import Load
 from datetime import datetime, timedelta
 
 
 class Pipeline:
     """
-    smm base class, containing context, data and ETL functions
+    sml base class, containing context, data and ETL functions
     """
 
     def __init__(self):

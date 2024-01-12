@@ -1,6 +1,6 @@
 from datetime import datetime
 import pandas as pd
-from smm.context import Context
+from sml.context import Context
 
 
 class Message:
