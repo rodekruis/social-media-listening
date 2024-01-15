@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import os
 import time
+from azure.storage.blob import BlobServiceClient
 from google.oauth2 import service_account
 import googleapiclient.discovery
 from telethon import TelegramClient, events, sync
@@ -356,6 +357,22 @@ def get_telegram(config, days):
               "id",
               "TL",
               config)
+    
+    blobstorage_secrets = get_secret_keyvault('blobstorage-secret', config)
+    blobstorage_secrets = json.loads(blobstorage_secrets)
+    blob_service_client = BlobServiceClient.from_connection_string(blobstorage_secrets['connection_string'])
+    container = 'membercount'
+    blob_client = blob_service_client.get_blob_client(container=container, blob='membercount.csv')
+    with open('membercount.csv', "wb") as download_file:
+        download_file.write(blob_client.download_blob().readall())
+    df_member_counts_old = pd.read_csv('membercount.csv')
+    df_member_counts_all = pd.concat([df_member_counts_old, df_member_counts]).reset_index(drop=True)
+    df_member_counts_all = df_member_counts_all.drop(columns=['index', 'id'])
+    df_member_counts_all.to_csv('membercount.csv', index=False, encoding="utf-8")
+    with open('membercount.csv', "rb") as upload_file:
+        blob_client.upload_blob(upload_file, overwrite=True)
+    if os.path.exists('membercount.csv'):
+        os.remove('membercount.csv')
 
 
 async def scrape_messages(telegram_client, telegram_channels, start_date, end_date, df_messages, df_member_counts):
