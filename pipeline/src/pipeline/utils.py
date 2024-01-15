@@ -911,7 +911,7 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
         # add to read column
         df_tweets['toRead'] = 'no'
         if len(df_tweets) > 2000:
-            df_to_read = df_tweets(n=2000, random_state=1)
+            df_to_read = df_tweets.sample(n=2000, random_state=1)
             df_tweets.loc[df_tweets.index.isin(df_to_read.index.to_list()), 'toRead'] = 'yes'
         else:
             df_tweets['toRead'] = 'yes'
