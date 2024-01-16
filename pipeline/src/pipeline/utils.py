@@ -949,7 +949,8 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
             # Set text
             inputs = {
                 'Original message': message[text_raw],
-                'Translated message': message[text_processed]
+                'Translated message': message[text_processed],
+                'Message number': idx + 1
             }
 
             # push result to argilla
@@ -981,7 +982,8 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
         rg.log(
             dataset,
             name=argilla_dataset_name,
-            workspace=argilla_secret["workspace"]
+            workspace=argilla_secret["workspace"],
+            tags={"Country": config['country-code']}
         )
     # for label, score in zip(result['labels'], result['scores']):
     #     df_results.at[idx, label] = score
