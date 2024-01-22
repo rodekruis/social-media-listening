@@ -1,6 +1,7 @@
 from datetime import datetime
 import pandas as pd
 import os
+import pathlib
 from azure.storage.blob import BlobServiceClient
 import logging
 import pyodbc
@@ -33,7 +34,7 @@ class Load:
         if storage_name is not None:
             self.storage = storage_name
         else:
-            self.storage = None
+            self.storage = "local"
         if secrets is not None:
             self.set_secrets(secrets)
         else:
@@ -106,6 +107,8 @@ class Load:
 
         if self.storage == "local":
             # load locally
+            if not local_path.endswith('.csv'):
+                local_path = os.path.join(local_path, 'messages.csv')
             df_messages = pd.read_csv(local_path)
 
         elif self.storage == "Azure SQL Database":
@@ -180,8 +183,9 @@ class Load:
 
         if self.storage == "local":
             # save locally
-            local_directory = local_path[:local_path.rfind("/")]
-            os.makedirs(local_directory, exist_ok=True)
+            if not local_path.endswith('.csv'):
+                os.makedirs(local_path, exist_ok=True)
+                local_path = os.path.join(local_path, 'messages.csv')
             df_messages.to_csv(local_path, index=False, encoding="utf-8")
             logging.info(f"Successfully saved messages at {local_path}")
 
