@@ -1,10 +1,14 @@
 import os.path
 from typing import Union
+import shutil
 from sml.message import Message
 import re
 import stopwordsiso
 import pandas as pd
 from transformers import pipeline
+from setfit import SetFitModel
+from huggingface_hub import snapshot_download
+from huggingface_hub.utils import RepositoryNotFoundError
 from torch.cuda import is_available as is_gpu_available
 from google.cloud import translate_v2 as google_translate
 from google.oauth2 import service_account as google_service_account
@@ -17,8 +21,8 @@ import spacy
 import geopandas as gpd
 from sml.secrets import Secrets
 from sml.context import Context
-supported_translators = ["HuggingFace", "Google", "Microsoft", "Custom"]
-supported_classifiers = ["HuggingFace", "Custom"]
+supported_translators = ["Opus-MT", "Google", "Microsoft", "Custom"]
+supported_classifiers = ["HuggingFace", "SetFit"]
 supported_anonymizers = ["anonymization-app"]
 supported_classifier_tasks = ["sentiment-analysis", "zero-shot-classification"]
 
@@ -52,35 +56,30 @@ class Transform:
         self.wordfreq_lang = None
         self.lemmatizer = None
 
-    def set_translator(self, from_lang: str, to_lang: str, name: str = None, secrets: Secrets = None):
-        if self.secrets is None:
-            if secrets is None:
-                raise ValueError("Missing secrets for translator")
-            else:
-                self.secrets = secrets
+    def set_translator(self, from_lang: str, to_lang: str, model: str = None, secrets: Secrets = None):
+        self.secrets = secrets
         self.from_lang = from_lang
         self.to_lang = to_lang
         if self.from_lang is None or self.to_lang is None:
             raise ValueError(f"Original and target language must be specified for translator")
 
-        if name is None:
-            self.translator_name = "HuggingFace"
+        if model is None:
+            self.translator_name = "Opus-MT"
         else:
-            self.translator_name = name
+            self.translator_name = model
 
-        if self.translator_name == "HuggingFace":
+        if self.translator_name == "Opus-MT":
             device = 0 if is_gpu_available() else -1
             try:
                 self.translator = pipeline("translation", model=f"Helsinki-NLP/opus-mt-{from_lang}-{to_lang}",
                                            device=device)
             except ValueError:
-                try:
-                    self.translator = pipeline(f"translation_{from_lang}_to_{to_lang}", device=device)
-                except:
-                    raise KeyError("Translation model not found on HuggingFace, please use Microsoft or Google")
+                raise ValueError(f"Opus-MT does not support translations from {from_lang} to {to_lang}, please use Microsoft or Google")
 
         elif self.translator_name == "Microsoft":
-            constructed_url = secrets.get_secret('MSCOGNITIVE_URL')
+            if self.secrets is None:
+                raise ValueError("Missing secrets for translator")
+            constructed_url = "https://api.cognitive.microsofttranslator.com/translate"
             params = {
                 'api-version': '3.0',
                 'from': [from_lang],
@@ -95,6 +94,8 @@ class Transform:
             self.translator = [constructed_url, params, headers]
 
         elif self.translator_name == "Google":
+            if self.secrets is None:
+                raise ValueError("Missing secrets for translator")
             service_account_info = secrets.get_secret("GOOGLE_SERVICEACCOUNT")
             credentials = google_service_account.Credentials.from_service_account_info(json.loads(service_account_info))
             self.translator = google_translate.Client(credentials=credentials)
@@ -103,7 +104,7 @@ class Transform:
             self.translator = secrets.get_secret("TRANSLATOR_API_URL")
 
         else:
-            raise ValueError(f"Translator {name} is not supported. "
+            raise ValueError(f"Translator {model} is not supported. "
                              f"Supported translators are {supported_translators}")
 
     def translate_text(self, text: str):
@@ -114,8 +115,10 @@ class Transform:
             "from_lang": self.from_lang,
             "to_lang": self.to_lang,
         }
+        if pd.isna(text):
+            return translation_data
 
-        if self.translator_name == "HuggingFace":
+        if self.translator_name == "Opus-MT":
             translation = self.translator(text)
             translation_data = {
                 "text": translation[0]['translation_text'],
@@ -183,18 +186,14 @@ class Transform:
         message.add_translation(translation)
         return message
 
-    def set_classifier(self, name: str = None, lang: str = None, task: str = None,
+    def set_classifier(self, model: str = None, lang: str = None, task: str = None,
                        class_labels: str = None, secrets: Secrets = None):
-        if self.secrets is None:
-            if secrets is None:
-                raise ValueError("Missing secrets for classifier")
-            else:
-                self.secrets = secrets
+        self.secrets = secrets
         self.class_labels = class_labels
-        if name is None:
+        if model is None:
             self.classifier_name = "HuggingFace"
         else:
-            self.classifier_name = name
+            self.classifier_name = model
         if task is None:
             self.classifier_task = "sentiment-analysis"
         else:
@@ -223,21 +222,32 @@ class Transform:
                 raise ValueError(f"Classifier task {task} is not supported. "
                                  f"Supported classifier tasks are {supported_classifier_tasks}")
 
-        elif self.classifier_name == "Custom":
-            if self.classifier_task in supported_classifier_tasks:
-                self.classifier = self.secrets.get_secret("CLASSIFIER_API_URL")
-            else:
-                raise ValueError(f"Classifier task {task} is not supported. "
-                                 f"Supported classifier tasks are {supported_classifier_tasks}")
+        elif self.classifier_name == "SetFit":
+            if self.secrets is None:
+                raise ValueError("Missing secrets for SetFit classifier")
+            model_path = self.secrets.get_secret('SETFIT_MODEL_NAME')
+            try:
+                if not os.path.exists(os.path.join(model_path, 'config.json')):
+                    os.makedirs(model_path, exist_ok=True)
+                    snapshot_download(
+                        repo_id=model_path,
+                        local_dir=model_path
+                    )
+                self.classifier = SetFitModel.from_pretrained(model_path)  # download model
+                
+            except RepositoryNotFoundError:
+                raise ValueError(f"model {model_path} not found.")
 
         else:
-            raise ValueError(f"Classifier {name} is not supported. "
+            raise ValueError(f"Classifier {model} is not supported. "
                              f"Supported classifiers are {supported_classifiers}")
 
     def classify_text(self, text: str):
         if self.classifier_name is None:
             raise RuntimeError("Classifier not initialized, use set_classifier()")
         classification_data = []
+        if pd.isna(text):
+            return classification_data
 
         if self.classifier_name == "HuggingFace":
             if self.classifier_task == "sentiment-analysis":
@@ -250,21 +260,13 @@ class Transform:
                 result = self.classifier(sequences=text, candidate_labels=self.class_labels, multi_label=True)
                 for label, score in zip(result['labels'], result['scores']):
                     classification_data.append({'class': label, 'score': score})
-
-        elif self.classifier_name == "Custom":
-            payload = {'text': text}
-            if self.classifier_task != "sentiment-analysis":
-                payload['labels'] = self.class_labels
-                payload['multi_label'] = True
-            for retry in range(10):
-                try:
-                    result = requests.post(self.classifier, json=payload).json()
-                    for label, score in zip(result['labels'], result['scores']):
-                        classification_data.append({'class': label, 'score': score})
-                    break
-                except Exception as e:
-                    logging.error(e)
-                    sleep(10)
+            
+        if self.classifier_name == "SetFit":
+            scores = self.classifier.predict_proba([text]).numpy()[0]
+            with open(os.path.join(self.secrets.get_secret('SETFIT_MODEL_NAME'), "label_dict.json")) as infile:
+                label_dict = json.load(infile)
+                for ix, score in enumerate(scores):
+                    classification_data.append({"class": label_dict[str(ix)], "score": score})
 
         if not classification_data:
             logging.warning("Classifier returned no results, check configuration")
@@ -480,8 +482,20 @@ class Transform:
         # if translator is specified, use it to translate wordfreq
         if self.translator_name is not None:
             if self.from_lang != self.wordfreq_lang:
-                self.set_translator(from_lang=self.wordfreq_lang, to_lang=self.to_lang, name=self.translator_name)
-            df_word_freq['Translation'] = df_word_freq['Word'].apply(lambda x: self.translate(x)['text'], axis=1)
+                self.set_translator(from_lang=self.wordfreq_lang, to_lang=self.to_lang, model=self.translator_name)
+            df_word_freq['Translation'] = df_word_freq['Word'].apply(lambda x: self.translate_message(x)['text'], axis=1)
 
         return df_word_freq
-
+    
+    def clear_cache(self):
+        # clear HuggingFace cache
+        home = os.path.expanduser("~")
+        huggingface_cache = os.path.join(home, '.cache', 'huggingface', 'hub')
+        if os.path.exists(huggingface_cache):
+            shutil.rmtree(huggingface_cache)
+        # clear local cache
+        if self.secrets is not None:
+            model_path = self.secrets.get_secret('SETFIT_MODEL_NAME')
+            if os.path.exists(model_path):
+                shutil.rmtree(model_path)
+        
