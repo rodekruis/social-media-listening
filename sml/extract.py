@@ -57,6 +57,7 @@ class Extract:
             self.source = None
         self.start_date = None
         self.end_date = None
+        self.country = None
         self.queries = None
         self.users = None
         self.channels = None
@@ -70,6 +71,7 @@ class Extract:
     def get_data(self,
                  start_date=datetime.today(),
                  end_date=datetime.today() - timedelta(days=7),
+                 country=None,
                  queries=None,
                  users=None,
                  channels=None,
@@ -78,6 +80,7 @@ class Extract:
         
         self.start_date = start_date.date()
         self.end_date = end_date.date()
+        self.country = country
         self.queries = queries
         self.users = users
         self.channels = channels
@@ -289,7 +292,7 @@ class Extract:
             id_=message_entity.id,
             datetime_=message_entity.date,
             datetime_scraped_=datetime.today(),
-            country=None,
+            country=self.country,
             source="Telegram",
             group=message_entity.peer_id.channel_id,
             text=message_entity.message,
