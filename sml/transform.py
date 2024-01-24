@@ -22,9 +22,9 @@ import geopandas as gpd
 from sml.secrets import Secrets
 from sml.context import Context
 supported_translators = ["Opus-MT", "Google", "Microsoft", "Custom"]
-supported_classifiers = ["HuggingFace", "SetFit"]
-supported_anonymizers = ["anonymization-app"]
+supported_classifier_types = ["huggingface-pipeline", "setfit"]
 supported_classifier_tasks = ["sentiment-analysis", "zero-shot-classification"]
+supported_anonymizers = ["anonymization-app"]
 
 
 class Transform:
@@ -32,15 +32,15 @@ class Transform:
     transform data
     """
 
-    def __init__(self, secrets: Secrets = None, context: Context = None):
-        self.secrets = secrets
+    def __init__(self, secrets: Secrets = None):
         # translator fields
         self.translator_name = None
         self.from_lang = None
         self.to_lang = None
         self.translator = None
         # classifier fields
-        self.classifier_name = None
+        self.classifier_type = None
+        self.classifier_model = None
         self.classifier_lang = None
         self.classifier_task = None
         self.class_labels = None
@@ -55,9 +55,36 @@ class Transform:
         # wordfreq fields
         self.wordfreq_lang = None
         self.lemmatizer = None
+        if secrets is not None:
+            self.set_secrets(secrets)
+        else:
+            self.secrets = None
+            
+    def set_secrets(self, secrets):
+        if not isinstance(secrets, Secrets):
+            raise TypeError(f"invalid format of secrets, use secrets.Secrets")
+        missing_secrets = []
+        if self.translator_name == "Microsoft":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "MSCOGNITIVE_KEY",
+                    "MSCOGNITIVE_LOCATION"
+                ]
+            )
+        elif self.translator_name == "Google":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "GOOGLE_SERVICEACCOUNT"
+                ]
+            )
+        if missing_secrets:
+            raise Exception(f"Missing secret(s) {missing_secrets} for translator {self.translator_name}")
+        else:
+            self.secrets = secrets
+            return self
 
     def set_translator(self, from_lang: str, to_lang: str, model: str = None, secrets: Secrets = None):
-        self.secrets = secrets
+        self.set_secrets(secrets)
         self.from_lang = from_lang
         self.to_lang = to_lang
         if self.from_lang is None or self.to_lang is None:
@@ -77,8 +104,6 @@ class Transform:
                 raise ValueError(f"Opus-MT does not support translations from {from_lang} to {to_lang}, please use Microsoft or Google")
 
         elif self.translator_name == "Microsoft":
-            if self.secrets is None:
-                raise ValueError("Missing secrets for translator")
             constructed_url = "https://api.cognitive.microsofttranslator.com/translate"
             params = {
                 'api-version': '3.0',
@@ -94,8 +119,6 @@ class Transform:
             self.translator = [constructed_url, params, headers]
 
         elif self.translator_name == "Google":
-            if self.secrets is None:
-                raise ValueError("Missing secrets for translator")
             service_account_info = secrets.get_secret("GOOGLE_SERVICEACCOUNT")
             credentials = google_service_account.Credentials.from_service_account_info(json.loads(service_account_info))
             self.translator = google_translate.Client(credentials=credentials)
@@ -186,17 +209,24 @@ class Transform:
         message.add_translation(translation)
         return message
 
-    def set_classifier(self, model: str = None, lang: str = None, task: str = None,
+    def set_classifier(self, type: str = None, model: str = None, lang: str = None, task: str = None,
                        class_labels: str = None, secrets: Secrets = None):
-        self.secrets = secrets
+        self.set_secrets(secrets)
         self.class_labels = class_labels
-        if model is None:
-            self.classifier_name = "HuggingFace"
+        if type is None:
+            self.classifier_type = "huggingface-pipeline"
         else:
-            self.classifier_name = model
+            if type not in supported_classifier_types:
+                raise ValueError(f"Classifier of type {self.classifier_type} is not supported. "
+                                 f"Supported classifiers are {supported_classifier_types}")
+            self.classifier_type = type
+        self.classifier_model = model
         if task is None:
             self.classifier_task = "sentiment-analysis"
         else:
+            if task not in supported_classifier_tasks:
+                raise ValueError(f"Classifier task {task} is not supported. "
+                                 f"Supported classifier tasks are {supported_classifier_tasks}")
             self.classifier_task = task
 
         self.classifier_lang = lang
@@ -211,45 +241,35 @@ class Transform:
                 raise ValueError(f"Class labels must be specified for classifier task {self.classifier_task}")
             self.class_labels = class_labels
 
-        if self.classifier_name == "HuggingFace":
-            if self.classifier_task == "sentiment-analysis":
-                self.classifier = pipeline(f"sentiment-analysis",
-                                           model="distilbert-base-uncased-finetuned-sst-2-english")
-            elif self.classifier_task == "zero-shot-classification":
-                self.classifier = pipeline(f"zero-shot-classification",
-                                           model="facebook/bart-large-mnli")
-            else:
-                raise ValueError(f"Classifier task {task} is not supported. "
-                                 f"Supported classifier tasks are {supported_classifier_tasks}")
-
-        elif self.classifier_name == "SetFit":
-            if self.secrets is None:
-                raise ValueError("Missing secrets for SetFit classifier")
-            model_path = self.secrets.get_secret('SETFIT_MODEL_NAME')
+        if self.classifier_type == "huggingface-pipeline":
             try:
-                if not os.path.exists(os.path.join(model_path, 'config.json')):
-                    os.makedirs(model_path, exist_ok=True)
+                self.classifier = pipeline(self.classifier_task, model=self.classifier_model)
+            except RepositoryNotFoundError:
+                raise ValueError(f"Transformer model {self.classifier_model} not found.")
+            
+        elif self.classifier_type == "setfit":
+            if self.classifier_model is None:
+                raise ValueError(f"SetFit model must be specified")
+            try:
+                if not os.path.exists(os.path.join(self.classifier_model, 'config.json')):
+                    os.makedirs(self.classifier_model, exist_ok=True)
                     snapshot_download(
-                        repo_id=model_path,
-                        local_dir=model_path
+                        repo_id=self.classifier_model,
+                        local_dir=self.classifier_model
                     )
-                self.classifier = SetFitModel.from_pretrained(model_path)  # download model
+                self.classifier = SetFitModel.from_pretrained(self.classifier_model)
                 
             except RepositoryNotFoundError:
-                raise ValueError(f"model {model_path} not found.")
-
-        else:
-            raise ValueError(f"Classifier {model} is not supported. "
-                             f"Supported classifiers are {supported_classifiers}")
+                raise ValueError(f"SetFit model {self.classifier_model} not found.")
 
     def classify_text(self, text: str):
-        if self.classifier_name is None:
+        if self.classifier_type is None:
             raise RuntimeError("Classifier not initialized, use set_classifier()")
         classification_data = []
         if pd.isna(text):
             return classification_data
 
-        if self.classifier_name == "HuggingFace":
+        if self.classifier_type == "huggingface-pipeline":
             if self.classifier_task == "sentiment-analysis":
                 result = self.classifier(text)[0]
                 classification_data = [
@@ -261,9 +281,9 @@ class Transform:
                 for label, score in zip(result['labels'], result['scores']):
                     classification_data.append({'class': label, 'score': score})
             
-        if self.classifier_name == "SetFit":
+        if self.classifier_type == "setfit":
             scores = self.classifier.predict_proba([text]).numpy()[0]
-            with open(os.path.join(self.secrets.get_secret('SETFIT_MODEL_NAME'), "label_dict.json")) as infile:
+            with open(os.path.join(self.classifier_model, "label_dict.json")) as infile:
                 label_dict = json.load(infile)
                 for ix, score in enumerate(scores):
                     classification_data.append({"class": label_dict[str(ix)], "score": score})
@@ -315,7 +335,6 @@ class Transform:
             except Exception as e:
                 logging.error(e)
                 sleep(10)
-
         return anonymized_text
 
     def anonymize_message(self, message: Message):
@@ -404,7 +423,19 @@ class Transform:
             for idx, message in enumerate(messages):
                 messages[idx] = self.anonymize_message(message)
         return messages
-
+    
+    def clear_cache(self):
+        # clear HuggingFace cache
+        home = os.path.expanduser("~")
+        huggingface_cache = os.path.join(home, '.cache', 'huggingface', 'hub')
+        if os.path.exists(huggingface_cache):
+            shutil.rmtree(huggingface_cache)
+        # clear local cache
+        if self.secrets is not None:
+            model_path = self.classifier_model
+            if os.path.exists(model_path):
+                shutil.rmtree(model_path)
+    
     ####################################################################################################################
 
     def set_wordfreq(self, wordfreq_lang, lemmatizer_model=None):
@@ -486,16 +517,3 @@ class Transform:
             df_word_freq['Translation'] = df_word_freq['Word'].apply(lambda x: self.translate_message(x)['text'], axis=1)
 
         return df_word_freq
-    
-    def clear_cache(self):
-        # clear HuggingFace cache
-        home = os.path.expanduser("~")
-        huggingface_cache = os.path.join(home, '.cache', 'huggingface', 'hub')
-        if os.path.exists(huggingface_cache):
-            shutil.rmtree(huggingface_cache)
-        # clear local cache
-        if self.secrets is not None:
-            model_path = self.secrets.get_secret('SETFIT_MODEL_NAME')
-            if os.path.exists(model_path):
-                shutil.rmtree(model_path)
-        
