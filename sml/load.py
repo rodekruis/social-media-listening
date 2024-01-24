@@ -29,36 +29,15 @@ class Load:
     load data from/into a data storage
     """
 
-    def __init__(self, storage_name=None, secrets: Secrets = None):
-        if storage_name is not None:
-            self.storage = storage_name
-        else:
-            self.storage = "local"
+    def __init__(self, secrets: Secrets = None):
+        self.storage = "local"
+        self.secrets = None
         if secrets is not None:
             self.set_secrets(secrets)
-        else:
-            self.secrets = None
-
-    def set_storage(self, storage_name=None, secrets=None):
-        if storage_name is not None:
-            if storage_name not in supported_storages:
-                raise ValueError(f"Storage {storage_name} is not supported."
-                                 f"Supported storages are {supported_storages}")
-
-            if hasattr(self, "storage") and self.storage == storage_name:
-                logging.info(f"Storage already set to {storage_name}")
-                return
-            self.storage = storage_name
-        else:
-            raise ValueError(f"Storage not specified; provide one of {supported_storages}")
-        if secrets is not None:
-            self.set_secrets(secrets)
-        return self
-
+            
     def set_secrets(self, secrets):
         if not isinstance(secrets, Secrets):
             raise TypeError(f"invalid format of secrets, use secrets.Secrets")
-
         missing_secrets = []
         if self.storage == "Azure SQL Database":
             missing_secrets = secrets.check_secrets(
@@ -79,10 +58,28 @@ class Load:
                 ]
             )
         if missing_secrets:
-            raise Exception(f"Missing secret(s) {missing_secrets} for storage of type {self.storage}")
+            raise Exception(f"Missing secret(s) {', '.join(missing_secrets)} for storage {self.storage}")
         else:
             self.secrets = secrets
             return self
+
+    def set_storage(self, storage_name, secrets: Secrets = None):
+        if storage_name is not None:
+            if storage_name not in supported_storages:
+                raise ValueError(f"Storage {storage_name} is not supported."
+                                 f"Supported storages are {', '.join(supported_storages)}")
+
+            if hasattr(self, "storage") and self.storage == storage_name:
+                logging.info(f"Storage already set to {storage_name}")
+                return
+            self.storage = storage_name
+        else:
+            raise ValueError(f"Storage not specified; provide one of {', '.join(supported_storages)}")
+        if secrets is not None:
+            self.set_secrets(secrets)
+        elif self.secrets is not None:
+            self.set_secrets(self.secrets)
+        return self
 
     def save_wordfrequencies(self, frequencies, directory, filename):
 
@@ -103,13 +100,14 @@ class Load:
                      country=None,
                      source=None
                      ):
-
+        if self.storage is None:
+            raise RuntimeError("Storage not specified, use set_storage()")
+        df_messages = pd.DataFrame()
         if self.storage == "local":
             # load locally
             if not local_path.endswith('.csv'):
                 local_path = os.path.join(local_path, 'messages.csv')
             df_messages = pd.read_csv(local_path)
-
         elif self.storage == "Azure SQL Database":
             # load from Azure SQL Database
             if start_date is None or end_date is None:
@@ -119,26 +117,18 @@ class Load:
             if source is None:
                 raise Exception(f"Please specify source to query Azure SQL Database")
             df_messages = self._read_db(start_date, end_date, country, source)
-
         elif self.storage == "Azure Blob Storage":
             local_directory = local_path[:local_path.rfind("/")]
             os.makedirs(local_directory, exist_ok=True)
-
             try:
                 self._download_blob(local_path, blob_path)
             except Exception as e:
                 logging.error(f"Failed downloading from Azure Blob Service: {e}")
-
             df_messages = pd.read_csv(local_path)
-
-        else:
-            raise ValueError(f"storage {self.storage} is not supported."
-                             f"Supported storages are {supported_storages}")
 
         # Convert dataframe of messages to list of message objects
         messages = []
         for idx, row in df_messages.iterrows():
-
             # Initiate Message objects with mandatory fields
             try:
                 message = Message(
@@ -151,7 +141,6 @@ class Load:
                 )
             except Exception:
                 raise ValueError("Mandatory fields of message missing")
-
             # Add optional fields
             if row['group']:
                 message.group = row['group']
@@ -165,13 +154,13 @@ class Load:
                 message.translations = ast.literal_eval(row['translations'])
             if row['info']:
                 message.info = ast.literal_eval(row['info'])
-                
             messages.append(message)
-
+            
         return messages
 
     def save_messages(self, messages, local_path=None, blob_path=None):
-            
+        if self.storage is None:
+            raise RuntimeError("Storage not specified, use set_storage()")
         # Read messages to dataframe
         df_messages = _messages_to_df(messages)
 
@@ -205,10 +194,6 @@ class Load:
                 self._save_to_db(df_messages)
             except Exception as e:
                 logging.error(f"Failed storing in Azure SQL Database: {e}")
-
-        else:
-            raise ValueError(f"storage {self.storage} is not supported."
-                             f"Supported storages are {supported_storages}")
 
     def push_to_argilla(self, messages, tags=None):
         # init argilla

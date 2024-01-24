@@ -55,10 +55,9 @@ class Transform:
         # wordfreq fields
         self.wordfreq_lang = None
         self.lemmatizer = None
+        self.secrets = None
         if secrets is not None:
             self.set_secrets(secrets)
-        else:
-            self.secrets = None
             
     def set_secrets(self, secrets):
         if not isinstance(secrets, Secrets):
@@ -78,22 +77,27 @@ class Transform:
                 ]
             )
         if missing_secrets:
-            raise Exception(f"Missing secret(s) {missing_secrets} for translator {self.translator_name}")
+            raise Exception(f"Missing secret(s) {', '.join(missing_secrets)} for translator {self.translator_name}")
         else:
             self.secrets = secrets
             return self
 
     def set_translator(self, from_lang: str, to_lang: str, model: str = None, secrets: Secrets = None):
-        self.set_secrets(secrets)
+        if model is None:
+            self.translator_name = "Opus-MT"
+        elif model not in supported_translators:
+            raise ValueError(f"Translator {model} is not supported."
+                             f"Supported translators are {', '.join(supported_translators)}")
+        else:
+            self.translator_name = model
+        if secrets is not None:
+            self.set_secrets(secrets)
+        elif self.secrets is not None:
+            self.set_secrets(self.secrets)
         self.from_lang = from_lang
         self.to_lang = to_lang
         if self.from_lang is None or self.to_lang is None:
             raise ValueError(f"Original and target language must be specified for translator")
-
-        if model is None:
-            self.translator_name = "Opus-MT"
-        else:
-            self.translator_name = model
 
         if self.translator_name == "Opus-MT":
             device = 0 if is_gpu_available() else -1
@@ -125,10 +129,8 @@ class Transform:
 
         elif self.translator_name == "Custom":
             self.translator = secrets.get_secret("TRANSLATOR_API_URL")
-
-        else:
-            raise ValueError(f"Translator {model} is not supported. "
-                             f"Supported translators are {supported_translators}")
+        
+        return self
 
     def translate_text(self, text: str):
         if self.translator_name is None:
@@ -211,14 +213,12 @@ class Transform:
 
     def set_classifier(self, type: str = None, model: str = None, lang: str = None, task: str = None,
                        class_labels: str = None, secrets: Secrets = None):
-        self.set_secrets(secrets)
-        self.class_labels = class_labels
         if type is None:
             self.classifier_type = "huggingface-pipeline"
         else:
             if type not in supported_classifier_types:
                 raise ValueError(f"Classifier of type {self.classifier_type} is not supported. "
-                                 f"Supported classifiers are {supported_classifier_types}")
+                                 f"Supported classifiers are {', '.join(supported_classifier_types)}")
             self.classifier_type = type
         self.classifier_model = model
         if task is None:
@@ -226,9 +226,13 @@ class Transform:
         else:
             if task not in supported_classifier_tasks:
                 raise ValueError(f"Classifier task {task} is not supported. "
-                                 f"Supported classifier tasks are {supported_classifier_tasks}")
+                                 f"Supported classifier tasks are {', '.join(supported_classifier_tasks)}")
             self.classifier_task = task
-
+        if secrets is not None:
+            self.set_secrets(secrets)
+        elif self.secrets is not None:
+            self.set_secrets(self.secrets)
+        self.class_labels = class_labels
         self.classifier_lang = lang
 
         if self.classifier_task == "sentiment-analysis":
@@ -261,6 +265,8 @@ class Transform:
                 
             except RepositoryNotFoundError:
                 raise ValueError(f"SetFit model {self.classifier_model} not found.")
+            
+        return self
 
     def classify_text(self, text: str):
         if self.classifier_type is None:
@@ -319,7 +325,7 @@ class Transform:
 
         else:
             raise ValueError(f"Anonymizer {name} is not supported. "
-                             f"Supported anonymizers are {supported_anonymizers}")
+                             f"Supported anonymizers are {', '.join(supported_anonymizers)}")
 
     def anonymize_text(self, text: str):
         if self.anonymizer_name is None:

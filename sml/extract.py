@@ -15,67 +15,13 @@ import asyncio
 supported_sources = ["telegram"]  # "twitter", "kobo",
 
 
-class SocialMediaSource:
-    """
-    social media source
-    """
-    
-    def __init__(self, name=None, secrets: Secrets = None):
-        if name not in supported_sources:
-            raise ValueError(f"Source {name} is not supported."
-                             f"Supported sources are {', '.join(supported_sources)}")
-        else:
-            self.name = name
-        if secrets is not None:
-            self.set_secrets(secrets)
-        else:
-            self.secrets = None
-    
-    def set_secrets(self, secrets):
-        if not isinstance(secrets, Secrets):
-            raise TypeError(f"invalid format of secrets, use secrets.Secrets")
-        missing_secrets = []
-        if self.name == "telegram":
-            missing_secrets = secrets.check_secrets(
-                [
-                    "STRING_SESSION",
-                    "API_ID",
-                    "API_HASH"
-                ]
-            )
-        if self.name == "twitter":
-            missing_secrets = secrets.check_secrets(
-                [
-                    "API_CONSUMER_KEY",
-                    "API_CONSUMER_SECRET",
-                    "API_ACCESS_TOKEN",
-                    "API_ACCESS_SECRET"
-                ]
-            )
-        if self.name == "kobo":
-            missing_secrets = secrets.check_secrets(
-                [
-                    "ASSET",
-                    "TOKEN"
-                ]
-            )
-        if missing_secrets:
-            raise Exception(f"Missing secret(s) {missing_secrets} for source {self.name}")
-        else:
-            self.secrets = secrets
-            return self
-
-
 class Extract:
     """
     extract data from social media
     """
     
-    def __init__(self, source=None, secrets: Secrets = None):
-        if source is not None:
-            self.source = SocialMediaSource(source, secrets)
-        else:
-            self.source = None
+    def __init__(self, secrets: Secrets = None):
+        self.source = None
         self.start_date = None
         self.end_date = None
         self.country = None
@@ -84,9 +30,60 @@ class Extract:
         self.channels = None
         self.pages = None
         self.store_temp = None
+        self.secrets = None
+        if secrets is not None:
+            self.set_secrets(secrets)
+        
+    def set_secrets(self, secrets):
+        if not isinstance(secrets, Secrets):
+            raise TypeError(f"invalid format of secrets, use secrets.Secrets")
+        missing_secrets = []
+        if self.source == "telegram":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "STRING_SESSION",
+                    "API_ID",
+                    "API_HASH"
+                ]
+            )
+        if self.source == "twitter":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "API_CONSUMER_KEY",
+                    "API_CONSUMER_SECRET",
+                    "API_ACCESS_TOKEN",
+                    "API_ACCESS_SECRET"
+                ]
+            )
+        if self.source == "kobo":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "KOBO_URL",
+                    "KOBO_ASSET",
+                    "KOBO_TOKEN"
+                ]
+            )
+        if missing_secrets:
+            raise Exception(f"Missing secret(s) {', '.join(missing_secrets)} for source {self.source}")
+        else:
+            self.secrets = secrets
+            return self
     
-    def set_source(self, source, secrets):
-        self.source = SocialMediaSource(source, secrets)
+    def set_source(self, source_name, secrets: Secrets = None):
+        if source_name is not None:
+            if source_name not in supported_sources:
+                raise ValueError(f"Source {source_name} is not supported."
+                                 f"Supported sources are {', '.join(supported_sources)}")
+            else:
+                self.source = source_name
+        else:
+            raise ValueError(f"Source not specified; provide one of {', '.join(supported_sources)}")
+        if secrets is not None:
+            self.set_secrets(secrets)
+        elif self.secrets is not None:
+            self.set_secrets(self.secrets)
+        else:
+            raise ValueError(f"Set secrets before setting source")
         return self
     
     def get_data(self,
@@ -98,7 +95,8 @@ class Extract:
                  channels=None,
                  pages=None,
                  store_temp=True):
-        
+        if self.source is None:
+            raise RuntimeError("Source not specified, use set_source()")
         self.start_date = start_date.date()
         self.end_date = end_date.date()
         self.country = country
@@ -107,30 +105,26 @@ class Extract:
         self.channels = channels
         self.pages = pages
         self.store_temp = store_temp
-        
-        if self.source.name == "twitter":
+        messages = []
+        if self.source == "twitter":
             logging.info('Getting Twitter data')
             messages = self.get_data_twitter()
-        elif self.source.name == "kobo":
+        elif self.source == "kobo":
             logging.info('Getting Kobo data')
             messages = self.get_data_kobo()
-        elif self.source.name == "telegram":
+        elif self.source == "telegram":
             logging.info('Getting Telegram data')
             messages = self.get_data_telegram()
-        else:
-            raise ValueError(f"source {self.source.name} is not supported."
-                             f"Supported sources are {', '.join(supported_sources)}")
-        
         return messages
     
     def get_data_twitter(self):
         auth = tweepy.OAuthHandler(
-            self.source.secrets['API_CONSUMER_KEY'],
-            self.source.secrets['API_CONSUMER_SECRET']
+            self.secrets['API_CONSUMER_KEY'],
+            self.secrets['API_CONSUMER_SECRET']
         )
         auth.set_access_token(
-            self.source.secrets['API_ACCESS_TOKEN'],
-            self.source.secrets['API_ACCESS_SECRET']
+            self.secrets['API_ACCESS_TOKEN'],
+            self.secrets['API_ACCESS_SECRET']
         )
         api = tweepy.API(auth, wait_on_rate_limit=True)
         all_messages = []
@@ -200,8 +194,8 @@ class Extract:
         return all_messages
     
     def get_data_kobo(self):
-        url = f'{self.kobo_api_url}{self.source.secrets["ASSET"]}/data.json'  # kobo api url: https://kobonew.ifrc.org/api/v2/assets/
-        headers = {'Authorization': f'Token {self.source.secrets["TOKEN"]}'}
+        url = f'{self.secrets["KOBO_URL"]}/api/v2/assets/{self.secrets["KOBO_ASSET"]}/data.json'
+        headers = {'Authorization': f'Token {self.secrets["KOBO_TOKEN"]}'}
         data_request = requests.get(url,
                                     headers=headers)
         data = data_request.json()['results']
@@ -221,9 +215,9 @@ class Extract:
     
     def get_data_telegram(self):
         telegram_client = TelegramClient(
-            StringSession(self.source.secrets.get_secret('STRING_SESSION')),
-            self.source.secrets.get_secret('API_ID'),
-            self.source.secrets.get_secret('API_HASH')
+            StringSession(self.secrets.get_secret('STRING_SESSION')),
+            self.secrets.get_secret('API_ID'),
+            self.secrets.get_secret('API_HASH')
         )
         
         loop = asyncio.get_event_loop()
@@ -334,5 +328,5 @@ class Extract:
         # save temp
         if not os.path.exists('./temp'):
             os.mkdir('./temp')
-        filename = f'./temp/{self.source.name}_{dataname}_{self.start_date}_{self.end_date}.csv'
+        filename = f'./temp/{self.source}_{dataname}_{self.start_date}_{self.end_date}.csv'
         df.to_csv(filename, index=False)

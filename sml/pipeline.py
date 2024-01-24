@@ -2,6 +2,7 @@ from sml.context import Context
 from sml.extract import Extract
 from sml.transform import Transform
 from sml.load import Load
+from sml.secrets import Secrets
 from datetime import datetime, timedelta
 
 
@@ -10,13 +11,12 @@ class Pipeline:
     sml base class, containing context, data and ETL functions
     """
 
-    def __init__(self):
+    def __init__(self, secrets: Secrets = None):
         self.context = Context()
-        self.extract = Extract()
-        self.transform = Transform()
-        self.load = Load()
+        self.extract = Extract(secrets=secrets)
+        self.transform = Transform(secrets=secrets)
+        self.load = Load(secrets=secrets)
         self.messages = []
-        self.wordfreq = None
 
     def run_pipline(self,
                     extract=True,
