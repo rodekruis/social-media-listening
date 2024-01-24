@@ -1,7 +1,6 @@
 from datetime import datetime
 import pandas as pd
 import os
-import pathlib
 from azure.storage.blob import BlobServiceClient
 import logging
 import pyodbc
@@ -114,11 +113,11 @@ class Load:
         elif self.storage == "Azure SQL Database":
             # load from Azure SQL Database
             if start_date is None or end_date is None:
-                raise Exception(f"Please provide an start and end date for reading from Azure SQL Database")
+                raise Exception(f"Please specify start and end date to query Azure SQL Database")
             if country is None:
-                raise Exception(f"Please provide a country for reading from Azure SQL Database")
+                raise Exception(f"Please specify country to query Azure SQL Database")
             if source is None:
-                raise Exception(f"Please provide a source for reading from Azure SQL Database")
+                raise Exception(f"Please specify source to query Azure SQL Database")
             df_messages = self._read_db(start_date, end_date, country, source)
 
         elif self.storage == "Azure Blob Storage":
@@ -156,28 +155,23 @@ class Load:
             # Add optional fields
             if row['group']:
                 message.group = row['group']
-
             if row['reply']:
                 message.reply = row['reply']
-
             if row['reply_to']:
                 message.reply_to = row['reply_to']
-
             if row['classifications']:
                 message.classifications = ast.literal_eval(row['classifications'])
-
             if row['translations']:
                 message.translations = ast.literal_eval(row['translations'])
-
             if row['info']:
                 message.info = ast.literal_eval(row['info'])
-
+                
             messages.append(message)
 
         return messages
 
     def save_messages(self, messages, local_path=None, blob_path=None):
-
+            
         # Read messages to dataframe
         df_messages = _messages_to_df(messages)
 
@@ -194,13 +188,18 @@ class Load:
             local_directory = local_path[:local_path.rfind("/")]
             os.makedirs(local_directory, exist_ok=True)
             df_messages.to_csv(local_path, index=False, encoding="utf-8")
-
             try:
                 self._upload_blob(local_path, blob_path)
             except Exception as e:
                 logging.error(f"Failed uploading to Azure Blob Service: {e}")
 
         elif self.storage == "Azure SQL Database":
+            if df_messages['datetime_'].isnull().values.any():
+                raise ValueError(f"Please specify datetime_ before saving to Azure SQL Database")
+            if df_messages['country'].isnull().values.any():
+                raise ValueError("Please specify country before saving to Azure SQL Database")
+            if df_messages['source'].isnull().values.any():
+                raise ValueError("Please specify source before saving to Azure SQL Database")
             # save to Azure SQL Database
             try:
                 self._save_to_db(df_messages)
@@ -299,12 +298,13 @@ class Load:
                             "classifications": row['classifications']
                         }]
                     )
+                    connection.commit()
 
                 logging.info(f"Successfully inserted {len(data_final)} entries into table {db_table_name}, "
                              f"{len(data) - len(data_final)} duplicates already in database")
 
             except pyodbc.Error as error:
-                logging.warning("Failed to insert into SQL table {}".format(error))
+                logging.error("Failed to insert into SQL table {}".format(error))
 
             finally:
                 connection.close()
@@ -320,7 +320,6 @@ class Load:
 
         try:
             engine, connection = self._connect_to_db()
-            print(db_table_name, db_schema)
             messages_table = db.Table(db_table_name, db.MetaData(schema=db_schema), autoload_with=engine)
 
             # prepare query
@@ -335,7 +334,6 @@ class Load:
             output = connection.execute(query)
             results = output.fetchall()
             df_messages = pd.DataFrame(results)
-            df_messages.columns = results[0].keys()
             logging.info(
                 f"Successfully retrieved {len(df_messages)} {source} messages"
                 f"from {start_date} to {end_date} from table {db_table_name}"
