@@ -872,7 +872,16 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
     fsc_secret = get_secret_keyvault("few-shot-classification-secret", config)
     fsc_secret = json.loads(fsc_secret)
     df_tweets['topic'] = None
+    df_tweets['prediction'] = None
     list_df = [df_tweets[i:i+n_examples] for i in range(0, len(df_tweets), n_examples)]
+
+    topics = [
+        "ANOMALY", "ARMY", "CHILDREN", "CONNECTIVITY", "CONNECTWITHREDCROSS", "EDUCATION", "FOOD", "GOODSSERVICES",
+        "HEALTH", "INCLUSIONCVA", "LEGAL", "MONEY/BANKING", "NFINONFOODITEMS", "OTHERPROGRAMSOTHERNGOS", "PARCEL",
+        "PAYMENTCVA", "PETS", "PMER/NEWPROGRAMOPERTUNITIES", "PROGRAMINFO", "PROGRAMINFORMATION", "PSSRFL",
+        "REGISTRATIONCVA", "SENTIMENT/FEEDBACK", "SHELTER", "TRANSLATION/LANGUAGE", "TRANSPORT/CAR",
+        "TRANSPORT/MOVEMENT", "WASH", "WORK/JOBS"
+    ]
 
     for df_tweets_ in tqdm(list_df):
         payload = {
@@ -888,6 +897,17 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
                 for idx, prediction in zip(df_tweets_.index, output['predictions']):
                     if prediction['probability'] > threshold:
                         df_tweets.at[idx, 'topic'] = prediction['label']
+
+                    if not prediction['label']:
+                        tmp_prediction = [(topic, 0.) for topic in topics]
+                    else:
+                        tmp_prediction = [(prediction['label'], prediction['probability'])]
+                        tmp_prediction += [(topic, 0.) for topic in topics if topic != prediction['label']]
+                        tmp_prediction.sort()
+
+                    df_tweets.at[idx, 'prediction'] = tmp_prediction
+
+
         except:
             logging.warning(f"error with few-shot-classification-api")
             logging.warning(f"{response}")
@@ -927,37 +947,22 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
         )
 
         records = []
-        topics = [
-            "ANOMALY", "ARMY", "CHILDREN", "CONNECTIVITY", "CONNECTWITHREDCROSS", "EDUCATION", "FOOD", "GOODSSERVICES",
-            "HEALTH", "INCLUSIONCVA", "LEGAL", "MONEY/BANKING", "NFINONFOODITEMS", "OTHERPROGRAMSOTHERNGOS", "PARCEL",
-            "PAYMENTCVA", "PETS", "PMER/NEWPROGRAMOPERTUNITIES", "PROGRAMINFO", "PROGRAMINFORMATION", "PSSRFL",
-            "REGISTRATIONCVA", "SENTIMENT/FEEDBACK", "SHELTER", "TRANSLATION/LANGUAGE", "TRANSPORT/CAR",
-            "TRANSPORT/MOVEMENT", "WASH", "WORK/JOBS"
-        ]
         argilla_dataset_name = f"{config['country-code'].lower()}-{df_tweets['date'].min()}-{df_tweets['date'].max()}"
 
         for idx, message in tqdm(df_tweets.iterrows(), total=df_tweets.shape[0]):
-            # Set predictions
-            if 'predictions' not in output:
-                prediction = [(topic, 0.) for topic in topics]
-            else:
-                predicted_topics = [prediction['label'] for prediction in output['predictions']]
-                prediction = [(prediction['label'], prediction['probability']) for prediction in output['predictions']]
-                prediction += [(topic, 0.) for topic in topics if topic not in predicted_topics]
-                prediction.sort()
-
             # Set text
             inputs = {
                 'Original message': message[text_raw],
                 'Translated message': message[text_processed],
-                'Message number': idx + 1
+                'Message number': idx + 1,
+                'Channel': message.source
             }
 
             # push result to argilla
             records.append(
                 rg.TextClassificationRecord(
                     inputs=inputs,
-                    prediction=prediction,
+                    prediction=message.prediction,
                     prediction_agent="sml-model-0.0.1",
                     multi_label=True,
                     metadata={
@@ -985,6 +990,8 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
             workspace=argilla_secret["workspace"],
             tags={"Country": config['country-code']}
         )
+
+    df_tweets.drop(['prediction', 'toRead'], axis=1)
     # for label, score in zip(result['labels'], result['scores']):
     #     df_results.at[idx, label] = score
     #     df_tweets.at[idx, f'{label}_score'] = score  # copy scores back into original dataframe
