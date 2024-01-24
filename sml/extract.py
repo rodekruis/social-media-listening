@@ -26,23 +26,44 @@ class SocialMediaSource:
                              f"Supported sources are {', '.join(supported_sources)}")
         else:
             self.name = name
-        self.secrets = self.set_secrets(secrets)
+        if secrets is not None:
+            self.set_secrets(secrets)
+        else:
+            self.secrets = None
     
     def set_secrets(self, secrets):
         if not isinstance(secrets, Secrets):
             raise TypeError(f"invalid format of secrets, use secrets.Secrets")
-        # if self.check_secrets(secrets):
+        missing_secrets = []
+        if self.name == "telegram":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "STRING_SESSION",
+                    "API_ID",
+                    "API_HASH"
+                ]
+            )
+        if self.name == "twitter":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "API_CONSUMER_KEY",
+                    "API_CONSUMER_SECRET",
+                    "API_ACCESS_TOKEN",
+                    "API_ACCESS_SECRET"
+                ]
+            )
+        if self.name == "kobo":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "ASSET",
+                    "TOKEN"
+                ]
+            )
+        if missing_secrets:
+            raise Exception(f"Missing secret(s) {missing_secrets} for source {self.name}")
         else:
             self.secrets = secrets
-            return self.secrets
-    
-    # def check_secrets(self):
-    #     #TODO check that right secrets are filled for data source
-    #     # here you check if all storage-specific secrets are present
-    #     try:
-    #         db_secret = self.secrets('azure-database-secret') # TODO change name of secrets to one needed in this script
-    #     except ValueError:
-    #         raise ValueError('Secrets for storage not found!')
+            return self
 
 
 class Extract:
