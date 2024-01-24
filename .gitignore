@@ -16,6 +16,9 @@ coverage
 # External code
 node_modules
 
+# HuggingFace custom models
+rodekruis/
+
 # Logs / Cache / temporary files
 logs
 *.log
