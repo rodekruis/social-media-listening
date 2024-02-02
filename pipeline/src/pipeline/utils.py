@@ -878,10 +878,11 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
     topics = [
         "ANOMALY", "ARMY", "CHILDREN", "CONNECTIVITY", "RC CONNECT WITH RED CROSS", "EDUCATION", "FOOD", "GOODS/SERVICES",
         "HEALTH", "CVA INCLUSION", "LEGAL", "MONEY/BANKING", "NFI", "OTHER PROGRAMS/NGOS", "PARCEL",
-        "CVA PAYMENT", "PETS", "RC PMER/NEW PROGRAMS", "CVA PROGRAM INFO", "RC PROGRAM INFO", "PSS & RFL",
+        "CVA PAYMENT", "CVA PMER", "PETS", "RC PMER/NEW PROGRAMS", "CVA PROGRAM INFO", "RC PROGRAM INFO", "PSS & RFL",
         "CVA REGISTRATION", "SENTIMENT", "SHELTER", "TRANSLATION/LANGUAGE", "CAR",
         "TRANSPORT/MOVEMENT", "WASH", "WORK/JOBS"
     ]
+    topics = list(set(topics))
 
     for df_tweets_ in tqdm(list_df):
         payload = {
