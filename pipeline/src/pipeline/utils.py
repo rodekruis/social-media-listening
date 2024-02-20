@@ -951,12 +951,6 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
         )
 
         records = []
-        keywords = [
-            "червоний хрест", "червоного хреста", "червоному хресту", "червоним хрестом", "червоному хресті",
-            "красный крест", "красного крестa", "красному кресту", "красного креста", "красным крестом",
-            "красном кресте", "крест", "крестa", "кресту", "крестом", "кресте", "Хреста", "Хрест", "хрестом",
-            "хресту", "хресті", "КК", "ЧХ", "МКЧХ", "МФОКК", "МККК", "МФОККиКП", "МФЧХ", "IFRC"
-        ]
         argilla_dataset_name = f"{config['country-code'].lower()}-{df_tweets['date'].min()}-{df_tweets['date'].max()}"
 
         for idx, message in tqdm(df_tweets.iterrows(), total=df_tweets.shape[0]):
@@ -969,9 +963,7 @@ def classify_text(df_tweets, text_raw, text_processed, labels, config, n_example
             }
 
             # Check if Red Cross message
-            if any(keyword in message[text_raw] for keyword in keywords):
-                is_rc_message = "yes"
-            elif any(keyword in message[text_processed] for keyword in keywords):
+            if message['rcrc']:
                 is_rc_message = "yes"
             else:
                 is_rc_message = "no"
