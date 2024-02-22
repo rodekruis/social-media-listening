@@ -94,6 +94,7 @@ class Transform:
             self.set_secrets(secrets)
         elif self.secrets is not None:
             self.set_secrets(self.secrets)
+        print(self.secrets)
         self.from_lang = from_lang
         self.to_lang = to_lang
         if self.from_lang is None or self.to_lang is None:
@@ -115,20 +116,20 @@ class Transform:
                 'to': [to_lang],
             }
             headers = {
-                'Ocp-Apim-Subscription-Key': secrets.get_secret("MSCOGNITIVE_KEY"),
-                'Ocp-Apim-Subscription-Region': secrets.get_secret("MSCOGNITIVE_LOCATION"),
+                'Ocp-Apim-Subscription-Key': self.secrets.get_secret("MSCOGNITIVE_KEY"),
+                'Ocp-Apim-Subscription-Region': self.secrets.get_secret("MSCOGNITIVE_LOCATION"),
                 'Content-type': 'application/json',
                 'X-ClientTraceId': str(uuid.uuid4())
             }
             self.translator = [constructed_url, params, headers]
 
         elif self.translator_name == "Google":
-            service_account_info = secrets.get_secret("GOOGLE_SERVICEACCOUNT")
+            service_account_info = self.secrets.get_secret("GOOGLE_SERVICEACCOUNT")
             credentials = google_service_account.Credentials.from_service_account_info(json.loads(service_account_info))
             self.translator = google_translate.Client(credentials=credentials)
 
         elif self.translator_name == "Custom":
-            self.translator = secrets.get_secret("TRANSLATOR_API_URL")
+            self.translator = self.secrets.get_secret("TRANSLATOR_API_URL")
         
         return self
 

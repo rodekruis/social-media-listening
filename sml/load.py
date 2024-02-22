@@ -42,12 +42,12 @@ class Load:
         if self.storage == "Azure SQL Database":
             missing_secrets = secrets.check_secrets(
                 [
-                    "sql_db_server",
-                    "sql_db",
-                    "sql_user",
-                    "sql_password",
-                    "table_name",
-                    "table_schema"
+                    "SQL_DB_SERVER",
+                    "SQL_DB",
+                    "SQL_USER",
+                    "SQL_PASSWORD",
+                    "TABLE_NAME",
+                    "TABLE_SCHEMA"
                 ]
             )
         if self.storage == "Azure Blob Storage":
@@ -198,9 +198,9 @@ class Load:
     def push_to_argilla(self, messages, tags=None):
         # init argilla
         rg.init(
-            api_url=self.secrets.get_secret("argilla_api_url"),
-            api_key=self.secrets.get_secret("argilla_api_key"),
-            workspace=self.secrets.get_secret("argilla_workspace")
+            api_url=self.secrets.get_secret("ARGILLA_API_URL"),
+            api_key=self.secrets.get_secret("ARGILLA_API_KEY"),
+            workspace=self.secrets.get_secret("ARGILLA_WORKSPACE")
         )
 
         topics = [next(iter(classification)) for message in messages for classification in message.classifications]
@@ -402,10 +402,10 @@ class Load:
             driver = '{ODBC Driver 18 for SQL Server}'
             params = urllib.parse.quote_plus(
                 f'Driver={driver};'
-                f'Server=tcp:{self.secrets.get_secret("sql_db_server")},1433;'
-                f'Database={self.secrets.get_secret("sql_db")};'
-                f'Uid={self.secrets.get_secret("sql_user")};'
-                f'Pwd={self.secrets.get_secret("sql_password")};'
+                f'Server=tcp:{self.secrets.get_secret("SQL_DB_SERVER")},1433;'
+                f'Database={self.secrets.get_secret("SQL_DB")};'
+                f'Uid={self.secrets.get_secret("SQL_USER")};'
+                f'Pwd={self.secrets.get_secret("SQL_PASSWORD")};'
                 f'Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;'
             )
             conn_str = 'mssql+pyodbc:///?odbc_connect={}'.format(params)

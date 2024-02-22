@@ -1,0 +1,50 @@
+# IDE / Editors
+.vscode
+.idea
+*.sublime-project
+*.sublime-workspace
+
+# Generated files
+dist
+coverage
+
+# External code
+node_modules
+
+# HuggingFace custom models
+rodekruis/
+
+# Logs / Cache / temporary files
+logs
+*.log
+npm-debug.log*
+.npm
+
+# Data
+*.csv
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
