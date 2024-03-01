@@ -94,7 +94,6 @@ class Transform:
             self.set_secrets(secrets)
         elif self.secrets is not None:
             self.set_secrets(self.secrets)
-        print(self.secrets)
         self.from_lang = from_lang
         self.to_lang = to_lang
         if self.from_lang is None or self.to_lang is None:

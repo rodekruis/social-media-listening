@@ -142,34 +142,36 @@ trio = ["trio (>=0.23)"]
 
 [[package]]
 name = "argilla"
-version = "1.10.0"
+version = "1.25.0"
 description = "Open-source tool for exploring, labeling, and monitoring data for NLP projects."
 optional = false
-python-versions = ">=3.7"
+python-versions = "<3.12,>=3.8"
 files = [
-    {file = "argilla-1.10.0-py3-none-any.whl", hash = "sha256:a4d3eae2181fbb02c48cf0e472a07c60c83d82473996902926f76847680810d2"},
-    {file = "argilla-1.10.0.tar.gz", hash = "sha256:a35fc55764b8df94e789ef3dc9cd91bfcef68a9a71747a39fa4f521be5112d47"},
+    {file = "argilla-1.25.0-py3-none-any.whl", hash = "sha256:38c5933fce70bc1fb72f9b185fb599dad881a266ff2eda904d5c210bc4a29d34"},
+    {file = "argilla-1.25.0.tar.gz", hash = "sha256:76562e5c70603fa82a4df0ffa72068a243cc5d30a35d339bd8a8bb0c9ec2678e"},
 ]
 
 [package.dependencies]
 backoff = "*"
 deprecated = ">=1.2.0,<1.3.0"
-httpx = ">=0.15,<0.24"
+httpx = ">=0.15,<=0.26"
 monotonic = "*"
+nltk = "<4.0.0"
 numpy = "<1.24.0"
 packaging = ">=20.0"
-pandas = ">=1.0.0,<2.0.0"
+pandas = ">=1.0.0"
 pydantic = ">=1.10.7"
-rich = "<=13.0.1"
+rich = "!=13.1.0"
 tqdm = ">=4.27.0"
-typer = ">=0.6.0,<1.0.0"
+typer = ">=0.6.0,<0.10.0"
 wrapt = ">=1.13,<1.15"
 
 [package.extras]
+integrations = ["PyYAML (>=5.4.1,<6.1.0)", "cleanlab (>=2.0.0,<2.1.0)", "datasets (>1.17.0,!=2.3.2)", "evaluate", "faiss-cpu", "flair (>=0.12.2)", "flyingsquid", "huggingface-hub (>=0.5.0)", "ipynbname", "openai (>=0.27.10,<1.0.0)", "peft", "pgmpy", "plotly (>=4.1.0)", "sentence-transformers", "sentence-transformers (>=2.0.0,<3.0.0)", "seqeval", "setfit (>=1.0.0)", "snorkel (>=0.9.7)", "spacy (>=3.5.0,<3.7.0)", "spacy-huggingface-hub (>=0.0.10)", "spacy-transformers (>=1.2.5)", "span-marker", "textdescriptives (>=2.7.0,<3.0.0)", "transformers[torch] (>=4.30.0)", "trl (>=0.5.0)"]
 listeners = ["prodict (>=0.8.0,<0.9.0)", "schedule (>=1.1.0,<1.2.0)"]
-postgresql = ["psycopg2 (>=2.9.5,<2.10.0)", "psycopg2-binary (>=2.9.5,<2.10.0)"]
-server = ["PyYAML (>=5.4.1,<6.1.0)", "SQLAlchemy (>=2.0.0,<2.1.0)", "aiofiles (>=0.6,<22.2)", "alembic (>=1.9.0,<1.10.0)", "brotli-asgi (>=1.1,<1.3)", "elasticsearch8[async] (>=8.7.0,<8.8.0)", "fastapi (>=0.75,<0.89)", "luqum (>=0.11,<0.13)", "opensearch-py (>=2.0.0,<2.1.0)", "passlib[bcrypt] (>=1.7.4,<1.8.0)", "psutil (>=5.8,<5.10)", "python-jose[cryptography] (>=3.2,<3.4)", "python-multipart (>=0.0.5,<0.1.0)", "scikit-learn (>=0.24.2)", "segment-analytics-python (==2.2.0)", "smart-open", "uvicorn[standard] (>=0.15.0,<0.21.0)"]
-tests = ["cleanlab (>=2.0.0,<2.1.0)", "datasets (>1.17.0,!=2.3.2)", "evaluate", "factory-boy (>=3.2.1,<3.3.0)", "faiss-cpu", "flair (>=0.12.2)", "flyingsquid", "huggingface-hub (>=0.5.0,<0.13)", "openai", "pgmpy", "plotly (>=4.1.0)", "pytest", "pytest-asyncio", "pytest-cov", "pytest-mock", "rich (==13.0.1)", "seqeval", "setfit", "snorkel (>=0.9.7)", "spacy (==3.5.0)", "span-marker", "transformers[torch] (>=4.19.0)"]
+server = ["argilla-server (>=1.25.0,<1.26.0)"]
+server-postgresql = ["argilla-server[postgresql] (>=1.25.0,<1.26.0)"]
+tests = ["factory-boy (>=3.2.1,<3.3.0)", "pytest", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock"]
 
 [[package]]
 name = "attrs"
@@ -2639,6 +2641,7 @@ files = [
     {file = "PyYAML-6.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:bf07ee2fef7014951eeb99f56f39c9bb4af143d8aa3c21b1677805985307da34"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:855fb52b0dc35af121542a76b9a84f8d1cd886ea97c84703eaa6d88e37a2ad28"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:40df9b996c2b73138957fe23a16a4f0ba614f4c0efce1e9406a184b6d07fa3a9"},
+    {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a08c6f0fe150303c1c6b71ebcd7213c2858041a7e01975da3a99aed1e7a378ef"},
     {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6c22bec3fbe2524cde73d7ada88f6566758a8f7227bfbf93a408a9d86bcc12a0"},
     {file = "PyYAML-6.0.1-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:8d4e9c88387b0f5c7d5f281e55304de64cf7f9c0021a3525bd3b1c542da3b0e4"},
     {file = "PyYAML-6.0.1-cp312-cp312-win32.whl", hash = "sha256:d483d2cdf104e7c9fa60c544d92981f12ad66a457afae824d146093b8c294c54"},
@@ -4453,5 +4456,5 @@ multidict = ">=4.0"
 
 [metadata]
 lock-version = "2.0"
-python-versions = "^3.11"
-content-hash = "57d3f9bf6731eb6889fadbef52884cf6f762c893f19dc291f6ebd9194050bf69"
+python-versions = ">=3.11,<3.12"
+content-hash = "c18135876dd4740f56645701bc1a66bd820820bdcffa4c000fae020cd31465b1"

@@ -17,10 +17,12 @@ RUN set -ex apt-get autoremove -y && \
 
 # add credentials and install SML pipeline
 WORKDIR .
-COPY credentials /credentials
 COPY pyproject.toml poetry.lock /
+RUN poetry config virtualenvs.create false
 RUN poetry install --no-root --no-interaction
+COPY credentials /credentials
 COPY sml /sml
-COPY "test_telegam_pipeline_copy.py" .
+COPY config /config
+COPY "telegram_pipeline.py" .
 
-ENTRYPOINT ["poetry", "run", "python", "-m", "test_telegam_pipeline_copy.py"]
+# ENTRYPOINT ["poetry", "run", "python", "-m", "telegram_pipeline"]

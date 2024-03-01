@@ -252,45 +252,47 @@ class Extract:
             
             for channel in telegram_channels:
                 logging.info(f"getting in telegram channel {channel}")
-                # try:
-                channel_entity = await telegram_client.get_entity(channel)
-                # scrape posts
-                replied_post_id = []
-                async for raw_message in telegram_client.iter_messages(
-                        channel_entity,
-                        offset_date=start_date,
-                        reverse=True,
-                        wait_time=5
-                ):
-                    reply = None
-                    message = self._from_telegram(raw_message)
-                    all_messages.append(message)
-                    if channel_entity.broadcast and raw_message.post and raw_message.replies:
-                        replied_post_id.append(raw_message.id)
-                    
-                    # scrape replies
-                    for post_id in replied_post_id:
-                        try:
-                            async for raw_reply in telegram_client.iter_messages(
-                                    channel_entity,
-                                    offset_date=start_date,
-                                    reverse=True,
-                                    reply_to=post_id,
-                                    wait_time=5
-                            ):
-                                reply = Message.from_telegram(raw_reply)
-                                all_messages.append(reply)
-                                time.sleep(5)
-                        except Exception as e:
-                            logging.info(f"getting replies for {message.id} failed: {e}")
+                try:
+                    channel_entity = await telegram_client.get_entity(channel)
+                    # scrape posts
+                    replied_post_id = []
+                    async for raw_message in telegram_client.iter_messages(
+                            channel_entity,
+                            offset_date=start_date,
+                            reverse=True,
+                            wait_time=5
+                    ):
+                        reply = None
+                        message = self._from_telegram(raw_message)
+                        all_messages.append(message)
+                        if channel_entity.broadcast and raw_message.post and raw_message.replies:
+                            replied_post_id.append(raw_message.id)
                         
-                        time_duration = time.time() - time_start
-                        if time_duration >= time_limit:
-                            logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
-                            break
-                    else:
-                        time.sleep(10)
-                        continue
+                        # scrape replies
+                        for post_id in replied_post_id:
+                            try:
+                                async for raw_reply in telegram_client.iter_messages(
+                                        channel_entity,
+                                        offset_date=start_date,
+                                        reverse=True,
+                                        reply_to=post_id,
+                                        wait_time=5
+                                ):
+                                    reply = Message.from_telegram(raw_reply)
+                                    all_messages.append(reply)
+                                    time.sleep(5)
+                            except Exception as e:
+                                logging.info(f"getting replies for {message.id} failed: {e}")
+                            
+                            time_duration = time.time() - time_start
+                            if time_duration >= time_limit:
+                                logging.info(f"getting replies for {channel} stopped: timeout {time_duration} seconds")
+                                break
+                        else:
+                            time.sleep(10)
+                            continue
+                except Exception as e:
+                    logging.info(f"Unable to get in telegram channel {channel}: {e}")
         
         await telegram_client.disconnect()
         
