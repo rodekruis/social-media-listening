@@ -256,8 +256,8 @@ class Load:
     def _save_to_db(self, data):
         data_final = self._prepare_messages_for_db(data)
         current_datetime = datetime.now()
-        db_table_name = self.secrets.get_secret("table_name")
-        db_schema = self.secrets.get_secret("table_schema")
+        db_table_name = self.secrets.get_secret("TABLE_NAME")
+        db_schema = self.secrets.get_secret("TABLE_SCHEMA")
         if not data_final.empty:
             try:
                 # Make connection to Azure database
@@ -300,8 +300,8 @@ class Load:
 
     def _read_db(self, start_date, end_date, country, source):
         # Connect to db
-        db_table_name = self.secrets.get_secret("table_name")
-        db_schema = self.secrets.get_secret("table_schema")
+        db_table_name = self.secrets.get_secret("TABLE_NAME")
+        db_schema = self.secrets.get_secret("TABLE_SCHEMA")
 
         try:
             engine, connection = self._connect_to_db()
