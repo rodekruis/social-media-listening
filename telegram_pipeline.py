@@ -24,9 +24,9 @@ def run_sml_pipeline(country):
     print(f"scraping messages")
     pipe.extract.set_source("telegram")
     messages = pipe.extract.get_data(
-        start_date=datetime.today()-timedelta(days=1), # todo 
+        start_date=datetime.today()-timedelta(days=14),
         country=settings[country]['country-code'],
-        channels=settings[country]['channels-to-track'][:1], # todo 
+        channels=settings[country]['channels-to-track'],
         store_temp=False
     )
     print(f"found {len(messages)} messages!")

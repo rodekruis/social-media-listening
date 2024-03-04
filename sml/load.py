@@ -249,7 +249,7 @@ class Load:
         rg.log(
             dataset,
             name=f"{tags['country']}-{tags['scrape']}",
-            workspace=self.secrets.get_secret("argilla_workspace"),
+            workspace=self.secrets.get_secret("ARGILLA_WORKSPACE"),
             tags=tags
         )
 
