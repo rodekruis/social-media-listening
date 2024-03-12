@@ -203,6 +203,19 @@ class Load:
             workspace=self.secrets.get_secret("ARGILLA_WORKSPACE")
         )
 
+        # Remove duplicate messages
+        unique_messages = []
+        for message in messages:
+            is_duplicate = False
+            for unique_message in unique_messages:
+                if message.text == unique_message.text:
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                unique_messages.append(message)
+        messages = unique_messages.copy()
+
+        # Get topics
         topics = [next(iter(classification)) for message in messages for classification in message.classifications]
         topics = set(topics)
 
