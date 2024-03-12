@@ -1,6 +1,5 @@
 from datetime import datetime
 import pandas as pd
-from sml.context import Context
 
 
 class Message:
@@ -11,14 +10,14 @@ class Message:
                  id_,
                  datetime_,
                  datetime_scraped_,
-                 country, # we should remove this because it is already contained in `info`
+                 country,  # TBI move to info
                  source,  # social media source (twitter, telegram..)
                  text,
                  group=None,  # group, channel, page, account, etc.
                  reply=False,
                  reply_to=None,
                  translations=None,
-                 info=None,  # country, etc.
+                 info=None,  # country, locations, etc.
                  classifications=None):
         self.id_ = id_
         if isinstance(datetime_, datetime):
@@ -48,47 +47,6 @@ class Message:
             self.classifications = []
         else:
             self.classifications = classifications
-
-    # def from_twitter(self, dict_):
-    #     self.id = dict_["id"]
-    #     self.datetime_ = dict_["created_at"]
-    #     self.source = "Twitter"
-    #     self.group = dict_["screen_name"]
-    #     self.text = dict_["text"]
-    #     self.reply_to = dict_["in_reply_to_status_id"]
-    #     if self.reply_to:
-    #         self.reply = True
-    #     else:
-    #         self.reply = False
-    #     self.translations = None
-    #     self.info = {
-    #         "country": Context.country,
-    #         "geo": dict_["geo"],
-    #         "coordinates": dict_["coordinates"]}
-    #     self.classifications = []
-
-    # def from_telegram(self, message_entity):
-    #     self.id = message_entity.id
-    #     self.datetime_ = message_entity.date
-    #     self.source = "Telegram"
-    #     self.group = message_entity.Peer.PeerChannel.channel_id
-    #     self.text = message_entity.message
-    #     if message_entity.post:
-    #         self.reply = False
-    #         self.reply_to = None
-    #     else:
-    #         self.reply = True
-    #         self.reply_to = message_entity.MessageReplyHeader.reply_to_msg_id
-    #     self.translations = []
-    #     self.info = {
-    #         "country": Context.country,
-    #         "geo": None,
-    #         "coordinates": None}
-    #     self.classifications = []
-
-    # def from_kobo(self, dict_):
-    #     # TBI automatically map from kobo
-    #     pass
 
     def add_translation(self, dict_):
         if type(dict_) is not dict:

@@ -6,7 +6,6 @@ from sml.secrets import Secrets
 if not os.path.exists("credentials/.env"):
     print('credentials not found, run this test from root directory')
 pipe = Pipeline(secrets=Secrets("credentials/.env"))
-# pipe.context.get({'country': 'USA'})
 
 print(f"scraping messages")
 pipe.extract.set_source("telegram")

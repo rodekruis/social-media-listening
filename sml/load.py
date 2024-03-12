@@ -170,65 +170,7 @@ class Load:
                 os.makedirs(local_path, exist_ok=True)
                 local_path = os.path.join(local_path, 'messages.csv')
             df_messages.to_csv(local_path, index=False, encoding="utf-8")
-            logging.info(f"Successfully saved messages at {local_path}")
 
-        elif self.storage == "Azure Blob Storage":
-            # save locally
-            local_directory = local_path[:local_path.rfind("/")]
-            os.makedirs(local_directory, exist_ok=True)
-            df_messages.to_csv(local_path, index=False, encoding="utf-8")
-            try:
-                self._upload_blob(local_path, blob_path)
-            except Exception as e:
-                logging.error(f"Failed uploading to Azure Blob Service: {e}")
-
-        elif self.storage == "Azure SQL Database":
-            if df_messages['datetime_'].isnull().values.any():
-                raise ValueError(f"Please specify datetime_ before saving to Azure SQL Database")
-            if df_messages['country'].isnull().values.any():
-                raise ValueError("Please specify country before saving to Azure SQL Database")
-            if df_messages['source'].isnull().values.any():
-                raise ValueError("Please specify source before saving to Azure SQL Database")
-            # save to Azure SQL Database
-            try:
-                self._save_to_db(df_messages)
-            except Exception as e:
-                logging.error(f"Failed storing in Azure SQL Database: {e}")
-
-    def push_to_argilla(self, messages, tags=None):
-        # init argilla
-        rg.init(
-            api_url=self.secrets.get_secret("ARGILLA_API_URL"),
-            api_key=self.secrets.get_secret("ARGILLA_API_KEY"),
-            workspace=self.secrets.get_secret("ARGILLA_WORKSPACE")
-        )
-
-        topics = [next(iter(classification)) for message in messages for classification in message.classifications]
-        topics = set(topics)
-
-        records = []
-        for ix, message in enumerate(messages):
-            # Set predictions
-            if not message.classifications:
-                prediction = [(topic, 0.) for topic in topics]
-            else:
-                predicted_topics = [next(iter(classification)) for classification in message.classifications]
-                prediction = [(next(iter(topic)), next(iter(topic.values()))) for topic in message.classifications]
-                prediction += [(topic, 0.) for topic in topics if topic not in predicted_topics]
-                prediction.sort()
-
-            # Set translations
-            inputs = {'Original message': message.text}
-            if message.translations:
-                for translation in message.translations:
-                    inputs[f"Translation ({next(iter(translation))})"] = next(iter(translation.values()))
-            inputs['Message number'] = ix+1
-
-            records.append(
-                rg.TextClassificationRecord(
-                    inputs=inputs,
-                    prediction=prediction,
-                    prediction_agent='sml-model-0.0.1',
                     multi_label=True,
                     metadata={
                         'channel': message.group,

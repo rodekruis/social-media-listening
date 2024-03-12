@@ -20,7 +20,6 @@ import uuid
 import spacy
 import geopandas as gpd
 from sml.secrets import Secrets
-from sml.context import Context
 supported_translators = ["Opus-MT", "Google", "Microsoft", "Custom"]
 supported_classifier_types = ["huggingface-pipeline", "setfit"]
 supported_classifier_tasks = ["sentiment-analysis", "zero-shot-classification"]
