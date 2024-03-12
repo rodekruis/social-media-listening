@@ -9,6 +9,7 @@ import urllib
 import ast
 import argilla as rg
 import numpy as np
+import re
 from sml.secrets import Secrets
 from sml.message import Message
 
@@ -203,6 +204,13 @@ class Load:
             workspace=self.secrets.get_secret("ARGILLA_WORKSPACE")
         )
 
+        rc_keywords = [
+            "червоний хрест", "червоного хреста", "червоному хресту", "червоним хрестом", "червоному хресті", "бчх",
+            "красный крест", "красного крестa", "красному кресту", "красного креста", "красным крестом",
+            "красном кресте", "крест", "крестa", "кресту", "крестом", "кресте", "Хреста", "Хрест", "хрестом", "хресту",
+            "хресті", "КК", "ЧХ", "МКЧХ", "МФОКК", "МККК", "МФОККиКП", "МФЧХ", "IFRC"
+        ]
+
         # Remove duplicate messages
         unique_messages = []
         for message in messages:
@@ -243,6 +251,17 @@ class Load:
             inputs['Message number'] = ix+1
             inputs['Channel'] = message.group
 
+            # check if message is red cross
+            if any(
+                    len(word.split()) == 1 and re.search(r"\b" + re.escape(word.lower()) + r"\b", message.text.lower())
+                    for word in rc_keywords
+            ):
+                red_cross = "Yes"
+            elif any(len(word.split()) >= 2 and word.lower() in message.text.lower() for word in rc_keywords):
+                red_cross = "Yes"
+            else:
+                red_cross = "No"
+
             records.append(
                 rg.TextClassificationRecord(
                     inputs=inputs,
@@ -253,7 +272,8 @@ class Load:
                         'channel': message.group,
                         'source': message.source,
                         'to read': np.random.choice(['yes', 'no'], size=1, p=[read_prod, 1 - read_prod])[0],
-                        'number': ix+1
+                        'number': ix+1,
+                        "Red Cross": red_cross
                     },
                     event_timestamp=message.datetime_
                 ),
