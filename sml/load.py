@@ -206,6 +206,11 @@ class Load:
         topics = [next(iter(classification)) for message in messages for classification in message.classifications]
         topics = set(topics)
 
+        # Determine to read probability
+        read_prod = 2000 / len(messages)
+        if read_prod > 1:
+            read_prod = 1
+
         records = []
         for ix, message in enumerate(messages):
             # Set predictions
@@ -223,6 +228,7 @@ class Load:
                 for translation in message.translations:
                     inputs[f"Translation ({next(iter(translation))})"] = next(iter(translation.values()))
             inputs['Message number'] = ix+1
+            inputs['Channel'] = message.group
 
             records.append(
                 rg.TextClassificationRecord(
@@ -233,7 +239,7 @@ class Load:
                     metadata={
                         'channel': message.group,
                         'source': message.source,
-                        'to read': np.random.choice(['yes', 'no'], size=1, p=[0.25, 0.75])[0],
+                        'to read': np.random.choice(['yes', 'no'], size=1, p=[read_prod, 1 - read_prod])[0],
                         'number': ix+1
                     },
                     event_timestamp=message.datetime_
