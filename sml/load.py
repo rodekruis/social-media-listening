@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import os
 from azure.storage.blob import BlobServiceClient
@@ -196,7 +196,7 @@ class Load:
             except Exception as e:
                 logging.error(f"Failed storing in Azure SQL Database: {e}")
 
-    def push_to_argilla(self, messages, tags=None):
+    def push_to_argilla(self, messages, dataset_name, tags=None):
         # init argilla
         rg.init(
             api_url=self.secrets.get_secret("ARGILLA_API_URL"),
@@ -224,7 +224,7 @@ class Load:
         messages = unique_messages.copy()
 
         # Get topics
-        topics = [next(iter(classification)) for message in messages for classification in message.classifications]
+        topics = [classification['class'] for message in messages for classification in message.classifications]
         topics = set(topics)
 
         # Determine to read probability
@@ -238,8 +238,8 @@ class Load:
             if not message.classifications:
                 prediction = [(topic, 0.) for topic in topics]
             else:
-                predicted_topics = [next(iter(classification)) for classification in message.classifications]
-                prediction = [(next(iter(topic)), next(iter(topic.values()))) for topic in message.classifications]
+                predicted_topics = [classification['class'] for classification in message.classifications]
+                prediction = [(classification['class'], classification['score']) for classification in message.classifications]
                 prediction += [(topic, 0.) for topic in topics if topic not in predicted_topics]
                 prediction.sort()
 
@@ -282,12 +282,15 @@ class Load:
         dataset = rg.DatasetForTextClassification(records)
 
         settings = rg.TextClassificationSettings(label_schema=topics)
-        rg.configure_dataset_settings(name=f"{tags['country']}-{tags['scrape']}", settings=settings)
+        rg.configure_dataset_settings(
+            name=dataset_name,
+            settings=settings
+        )
 
         # log the dataset
         rg.log(
             dataset,
-            name=f"{tags['country']}-{tags['scrape']}",
+            name=dataset_name,
             workspace=self.secrets.get_secret("ARGILLA_WORKSPACE"),
             tags=tags
         )
