@@ -18,7 +18,7 @@ def run_sml_pipeline(country):
 
     start_date = datetime.today() - timedelta(days=14)
     end_date = datetime.today()
-    country = settings[country]['country-code']
+    country_code = settings[country]['country-code']
 
     # todo: add reading az keyvault 
     # if os.path.exists("credentials/.env"):
@@ -31,7 +31,7 @@ def run_sml_pipeline(country):
     pipe.extract.set_source("telegram")
     messages = pipe.extract.get_data(
         start_date=start_date,
-        country=country,
+        country=country_code,
         channels=settings[country]['channels-to-track'],
         store_temp=False
     )
@@ -50,8 +50,8 @@ def run_sml_pipeline(country):
     pipe.load.save_messages(messages)
     pipe.load.push_to_argilla(
         messages=messages,
-        dataset_name=f"{country.lower()}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('Y-%m-%d')}",
-        tags={"Country": country}
+        dataset_name=f"{country_code.lower()}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('Y-%m-%d')}",
+        tags={"Country": country_code}
     )
     print(f"saved {len(messages)} messages!")
 
