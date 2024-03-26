@@ -4,6 +4,16 @@ from sml.pipeline import Pipeline
 from sml.secrets import Secrets
 import yaml
 import click
+import logging
+import sys
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 @click.command()
@@ -27,7 +37,7 @@ def run_sml_pipeline(country):
     #     print('Azure Key Vault not found, try with local env')
     pipe = Pipeline(secrets=Secrets("env"))
 
-    print(f"scraping messages")
+    logging.info(f"scraping messages")
     pipe.extract.set_source("telegram")
     messages = pipe.extract.get_data(
         start_date=start_date,
@@ -35,7 +45,7 @@ def run_sml_pipeline(country):
         channels=settings[country]['channels-to-track'],
         store_temp=False
     )
-    print(f"found {len(messages)} messages!")
+    logging.info(f"found {len(messages)} messages!")
 
     pipe.transform.set_translator(model="Microsoft",
                                   from_lang=["ru", "uk"],
@@ -44,7 +54,7 @@ def run_sml_pipeline(country):
                                   model="rodekruis/sml-ukr-message-classifier",
                                   lang="en")
     messages = pipe.transform.process_messages(messages, translate=True, classify=True)
-    print(f"processed {len(messages)} messages!")
+    logging.info(f"processed {len(messages)} messages!")
 
     pipe.load.set_storage("Azure SQL Database")
     pipe.load.save_messages(messages)
@@ -53,7 +63,7 @@ def run_sml_pipeline(country):
         dataset_name=f"{country_code.lower()}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('Y-%m-%d')}",
         tags={"Country": country_code}
     )
-    print(f"saved {len(messages)} messages!")
+    logging.info(f"saved {len(messages)} messages!")
 
 
 if __name__ == '__main__':
