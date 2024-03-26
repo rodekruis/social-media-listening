@@ -25,7 +25,6 @@ def run_sml_pipeline(country):
             settings = yaml.safe_load(f)
     else:
         settings = yaml.safe_load(os.environ["CONFIG"])
-    logging.info(f"Config: {settings}")
 
     start_date = datetime.today() - timedelta(days=14)
     end_date = datetime.today()
