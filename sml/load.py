@@ -252,15 +252,16 @@ class Load:
             inputs['Channel'] = message.group
 
             # check if message is red cross
-            if any(
-                    len(word.split()) == 1 and re.search(r"\b" + re.escape(word.lower()) + r"\b", message.text.lower())
-                    for word in rc_keywords
-            ):
-                red_cross = "Yes"
-            elif any(len(word.split()) >= 2 and word.lower() in message.text.lower() for word in rc_keywords):
-                red_cross = "Yes"
-            else:
-                red_cross = "No"
+            red_cross = "No"
+            for word in rc_keywords:
+                if len(word.split()) > 1:
+                    if message.text and word.lower() in message.text.lower():
+                        red_cross = "Yes"
+                        break
+                else:
+                    if message.text and re.search(r"\b" + re.escape(word.lower()) + r"\b", message.text.lower()):
+                        red_cross = "Yes"
+                        break
 
             records.append(
                 rg.TextClassificationRecord(
