@@ -35,7 +35,7 @@ class Load:
         self.secrets = None
         if secrets is not None:
             self.set_secrets(secrets)
-            
+
     def set_secrets(self, secrets):
         if not isinstance(secrets, Secrets):
             raise TypeError(f"invalid format of secrets, use secrets.Secrets")
@@ -156,7 +156,7 @@ class Load:
             if row['info']:
                 message.info = ast.literal_eval(row['info'])
             messages.append(message)
-            
+
         return messages
 
     def save_messages(self, messages, local_path=None, blob_path=None):
@@ -234,12 +234,17 @@ class Load:
 
         records = []
         for ix, message in enumerate(messages):
+            # Check if there is a message text
+            if not message.text:
+                continue
+
             # Set predictions
             if not message.classifications:
                 prediction = [(topic, 0.) for topic in topics]
             else:
                 predicted_topics = [classification['class'] for classification in message.classifications]
-                prediction = [(classification['class'], classification['score']) for classification in message.classifications]
+                prediction = [(classification['class'], classification['score']) for classification in
+                              message.classifications]
                 prediction += [(topic, 0.) for topic in topics if topic not in predicted_topics]
                 prediction.sort()
 
@@ -248,18 +253,18 @@ class Load:
             if message.translations:
                 for translation in message.translations:
                     inputs[f"Translation ({next(iter(translation))})"] = next(iter(translation.values()))
-            inputs['Message number'] = ix+1
+            inputs['Message number'] = ix + 1
             inputs['Channel'] = message.group
 
             # check if message is red cross
             red_cross = "No"
             for word in rc_keywords:
                 if len(word.split()) > 1:
-                    if message.text and word.lower() in message.text.lower():
+                    if word.lower() in message.text.lower():
                         red_cross = "Yes"
                         break
                 else:
-                    if message.text and re.search(r"\b" + re.escape(word.lower()) + r"\b", message.text.lower()):
+                    if re.search(r"\b" + re.escape(word.lower()) + r"\b", message.text.lower()):
                         red_cross = "Yes"
                         break
 
@@ -273,7 +278,7 @@ class Load:
                         'channel': message.group,
                         'source': message.source,
                         'to read': np.random.choice(['yes', 'no'], size=1, p=[read_prod, 1 - read_prod])[0],
-                        'number': ix+1,
+                        'number': ix + 1,
                         "Red Cross": red_cross
                     },
                     event_timestamp=message.datetime_

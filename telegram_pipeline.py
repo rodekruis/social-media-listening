@@ -60,7 +60,7 @@ def run_sml_pipeline(country):
     pipe.load.save_messages(messages)
     pipe.load.push_to_argilla(
         messages=messages,
-        dataset_name=f"{country_code.lower()}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('Y-%m-%d')}",
+        dataset_name=f"{country_code.lower()}-{start_date.strftime('%Y-%m-%d')}-{end_date.strftime('%Y-%m-%d')}",
         tags={"Country": country_code}
     )
     logging.info(f"saved {len(messages)} messages!")
