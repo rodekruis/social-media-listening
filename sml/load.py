@@ -252,7 +252,7 @@ class Load:
             inputs = {'Original message': message.text}
             if message.translations:
                 for translation in message.translations:
-                    inputs[f"Translation ({next(iter(translation))})"] = next(iter(translation.values()))
+                    inputs[f"Translated message"] = translation['text']
             inputs['Message number'] = ix + 1
             inputs['Channel'] = message.group
 
