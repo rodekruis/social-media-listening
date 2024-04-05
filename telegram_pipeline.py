@@ -48,7 +48,7 @@ def run_sml_pipeline(country):
     logging.info(f"found {len(messages)} messages!")
 
     pipe.transform.set_translator(model="Microsoft",
-                                  from_lang=["ru", "uk"],
+                                  from_lang="",  # empty string means auto-detect language
                                   to_lang="en")
     pipe.transform.set_classifier(type="setfit",
                                   model="rodekruis/sml-ukr-message-classifier",
