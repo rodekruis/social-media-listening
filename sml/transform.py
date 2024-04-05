@@ -20,7 +20,7 @@ import uuid
 import spacy
 import geopandas as gpd
 from sml.secrets import Secrets
-supported_translators = ["Opus-MT", "Google", "Microsoft", "Custom"]
+supported_translators = ["Opus-MT", "Google", "Microsoft"]
 supported_classifier_types = ["huggingface-pipeline", "setfit"]
 supported_classifier_tasks = ["sentiment-analysis", "zero-shot-classification"]
 supported_anonymizers = ["anonymization-app"]
@@ -34,9 +34,9 @@ class Transform:
     def __init__(self, secrets: Secrets = None):
         # translator fields
         self.translator_name = None
-        self.from_lang = None
-        self.to_lang = None
-        self.translator = None
+        self.from_langs = []
+        self.to_langs = []
+        self.translators = []
         # classifier fields
         self.classifier_type = None
         self.classifier_model = None
@@ -81,7 +81,7 @@ class Transform:
             self.secrets = secrets
             return self
 
-    def set_translator(self, from_lang: str, to_lang: str, model: str = None, secrets: Secrets = None):
+    def set_translator(self, from_lang: list | str, to_lang: list | str, model: str = None, secrets: Secrets = None):
         if model is None:
             self.translator_name = "Opus-MT"
         elif model not in supported_translators:
@@ -93,76 +93,80 @@ class Transform:
             self.set_secrets(secrets)
         elif self.secrets is not None:
             self.set_secrets(self.secrets)
-        self.from_lang = from_lang
-        self.to_lang = to_lang
-        if self.from_lang is None or self.to_lang is None:
+        self.from_langs = from_lang if type(from_lang) == list else [from_lang]
+        self.to_langs = to_lang if type(to_lang) == list else [to_lang]
+        if self.from_langs is None or self.to_langs is None:
             raise ValueError(f"Original and target language must be specified for translator")
-
-        if self.translator_name == "Opus-MT":
-            device = 0 if is_gpu_available() else -1
-            try:
-                self.translator = pipeline("translation", model=f"Helsinki-NLP/opus-mt-{from_lang}-{to_lang}",
-                                           device=device)
-            except ValueError:
-                raise ValueError(f"Opus-MT does not support translations from {from_lang} to {to_lang}, please use Microsoft or Google")
-
-        elif self.translator_name == "Microsoft":
-            constructed_url = "https://api.cognitive.microsofttranslator.com/translate"
-            params = {
-                'api-version': '3.0',
-                'from': [from_lang],
-                'to': [to_lang],
-            }
-            headers = {
-                'Ocp-Apim-Subscription-Key': self.secrets.get_secret("MSCOGNITIVE_KEY"),
-                'Ocp-Apim-Subscription-Region': self.secrets.get_secret("MSCOGNITIVE_LOCATION"),
-                'Content-type': 'application/json',
-                'X-ClientTraceId': str(uuid.uuid4())
-            }
-            self.translator = [constructed_url, params, headers]
-
-        elif self.translator_name == "Google":
-            service_account_info = self.secrets.get_secret("GOOGLE_SERVICEACCOUNT")
-            credentials = google_service_account.Credentials.from_service_account_info(json.loads(service_account_info))
-            self.translator = google_translate.Client(credentials=credentials)
-
-        elif self.translator_name == "Custom":
-            self.translator = self.secrets.get_secret("TRANSLATOR_API_URL")
+        
+        for from_lang in self.from_langs:
+            for to_lang in self.to_langs:
+                if from_lang == to_lang:
+                    raise ValueError(f"Original and target language of translator must be different")
+                
+                translator = {
+                    "engine": None,
+                    "from_lang": from_lang,
+                    "to_lang": to_lang,
+                }
+                
+                if self.translator_name == "Opus-MT":
+                    device = 0 if is_gpu_available() else -1
+                    try:
+                        translator["engine"] = pipeline("translation", model=f"Helsinki-NLP/opus-mt-{from_lang}-{to_lang}",
+                                                       device=device)
+                    except ValueError:
+                        raise ValueError(f"Opus-MT does not support translations from {from_lang} to {to_lang}, please use Microsoft or Google")
+        
+                elif self.translator_name == "Microsoft":
+                    constructed_url = "https://api.cognitive.microsofttranslator.com/translate"
+                    params = {
+                        'api-version': '3.0',
+                        'from': [from_lang],
+                        'to': [to_lang],
+                    }
+                    headers = {
+                        'Ocp-Apim-Subscription-Key': self.secrets.get_secret("MSCOGNITIVE_KEY"),
+                        'Ocp-Apim-Subscription-Region': self.secrets.get_secret("MSCOGNITIVE_LOCATION"),
+                        'Content-type': 'application/json',
+                        'X-ClientTraceId': str(uuid.uuid4())
+                    }
+                    translator["engine"] = [constructed_url, params, headers]
+        
+                elif self.translator_name == "Google":
+                    service_account_info = self.secrets.get_secret("GOOGLE_SERVICEACCOUNT")
+                    credentials = google_service_account.Credentials.from_service_account_info(json.loads(service_account_info))
+                    translator["engine"] = google_translate.Client(credentials=credentials)
+                
+                self.translators.append(translator)
         
         return self
 
-    def translate_text(self, text: str):
+    def translate_text(self, text: str, translator):
         if self.translator_name is None:
             raise RuntimeError("Translator not initialized, use set_translator()")
         translation_data = {
             'text': text,
-            "from_lang": self.from_lang,
-            "to_lang": self.to_lang,
+            "from_lang": translator["from_lang"],
+            "to_lang": translator["to_lang"],
         }
+        translator_engine = translator["engine"]
         if pd.isna(text):
             return translation_data
 
         if self.translator_name == "Opus-MT":
-            translation = self.translator(text)
-            translation_data = {
-                "text": translation[0]['translation_text'],
-                "from_lang": self.from_lang,
-                "to_lang": self.to_lang,
-            }
+            translation = translator_engine(text)
+            translation_data["text"] = translation[0]['translation_text']
 
         elif self.translator_name == "Microsoft":
-            constructed_url = self.translator[0]
-            params = self.translator[1]
-            headers = self.translator[2]
+            constructed_url = translator_engine[0]
+            params = translator_engine[1]
+            headers = translator_engine[2]
             for retry in range(10):
                 try:
-                    request = requests.post(constructed_url, params=params, headers=headers, json=[{'text': text}])
-                    response = request.json()
-                    translation_data = {
-                        "text": response[0]['translations'][0]['text'],
-                        "from_lang": self.from_lang,
-                        "to_lang": self.to_lang,
-                    }
+                    response = requests.post(constructed_url, params=params, headers=headers, json=[{'text': text}]).json()
+                    translation_data["text"] = response[0]['translations'][0]['text']
+                    if translation_data["from_lang"] == "":
+                        translation_data["from_lang"] = response[0]['detectedLanguage']['language']
                     break
                 except Exception as e:
                     logging.error(e)
@@ -171,31 +175,8 @@ class Transform:
         elif self.translator_name == "Google":
             for retry in range(10):
                 try:
-                    response = self.translator.translate(text, target_language=self.to_lang)
-                    translation_data = {
-                        "text": response["translatedText"],
-                        "from_lang": self.from_lang,
-                        "to_lang": self.to_lang,
-                    }
-                    break
-                except Exception as e:
-                    logging.error(e)
-                    sleep(10)
-
-        elif self.translator_name == "Custom":
-            payload = {
-                "text": text,
-                "from_lang": self.from_lang,
-                "to_lang": self.to_lang,
-            }
-            for retry in range(10):
-                try:
-                    response = requests.post(self.translator, json=payload).json()
-                    translation_data = {
-                        "text": response["translation_text"],
-                        "from_lang": self.from_lang,
-                        "to_lang": self.to_lang,
-                    }
+                    response = translator_engine.translate(text, target_language=translator["to_lang"])
+                    translation_data["text"] = response["translatedText"]
                     break
                 except Exception as e:
                     logging.error(e)
@@ -206,8 +187,9 @@ class Transform:
         return translation_data
 
     def translate_message(self, message: Message):
-        translation = self.translate_text(message.text)
-        message.add_translation(translation)
+        for translator in self.translators:
+            translation = self.translate_text(message.text, translator)
+            message.add_translation(translation)
         return message
 
     def set_classifier(self, type: str = None, model: str = None, lang: str = None, task: str = None,
