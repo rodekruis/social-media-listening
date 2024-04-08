@@ -240,15 +240,14 @@ class Extract:
     async def _scrape_messages(self, telegram_client, telegram_channels, start_date):
         
         await telegram_client.connect()
-        # Set timer to avoid scraping for too long
-        time_out = time.time() + 60 * 45  # = 45 min
         all_messages = []
         
         for channel in telegram_channels:
-            if time.time() >= time_out:
-                logging.info(f"time_out channel")
-                break
-            logging.info(f"getting in telegram channel {channel}")
+            # Set timer per channel to avoid scraping for too long
+            time_out = time.time() + 60 * 10  # = 10 min
+            channel_count = 0
+            
+            logging.info(f"starting telegram channel {channel} at {time.time()}")
             try:
                 channel_entity = await telegram_client.get_entity(channel)
                 # scrape posts
@@ -259,43 +258,38 @@ class Extract:
                         reverse=True,
                         wait_time=5
                 ):
-                    if time.time() >= time_out:
-                        logging.info(f"time_out message")
-                        break
-                    message = self._from_telegram(raw_message)
+                    message = self._from_telegram(raw_message, channel)
                     all_messages.append(message)
+                    channel_count += 1
+                    if time.time() >= time_out:
+                        logging.info(f"time_out channel {channel} at {time.time()}")
+                        break
+                    
                     if channel_entity.broadcast and raw_message.post and raw_message.replies:
                         replied_post_id.append(raw_message.id)
-                    
-                    # scrape replies
-                    for post_id in replied_post_id:
-                        try:
-                            async for raw_reply in telegram_client.iter_messages(
-                                    channel_entity,
-                                    offset_date=start_date,
-                                    reverse=True,
-                                    reply_to=post_id,
-                                    wait_time=5
-                            ):
-                                reply = Message.from_telegram(raw_reply)
-                                all_messages.append(reply)
-                                time.sleep(5)
-                        except Exception as e:
-                            logging.info(f"getting replies for {message.id} failed: {e}")
-                        
-                        if time.time() >= time_out:
-                            logging.info(f"time_out reply")
-                            break
-                    else:
-                        time.sleep(10)
-                        continue
+                        # scrape replies
+                        for post_id in replied_post_id:
+                            try:
+                                async for raw_reply in telegram_client.iter_messages(
+                                        channel_entity,
+                                        offset_date=start_date,
+                                        reverse=True,
+                                        reply_to=post_id,
+                                        wait_time=5
+                                ):
+                                    reply = self._from_telegram(raw_reply, channel)
+                                    all_messages.append(reply)
+                                    channel_count += 1
+                            except Exception as e:
+                                logging.info(f"getting replies for {message.id} failed: {e}")
             except Exception as e:
                 logging.info(f"Unable to get in telegram channel {channel}: {e}")
-        
+            logging.info(f"found {channel_count} messages in channel {channel}")
+            
         telegram_client.disconnect()
         return all_messages
     
-    def _from_telegram(self, message_entity):
+    def _from_telegram(self, message_entity, channel_name):
         if not message_entity.reply_to:
             reply_ = False
             reply_to_ = None
@@ -308,7 +302,7 @@ class Extract:
             datetime_scraped_=datetime.today(),
             country=self.country,
             source="Telegram",
-            group=message_entity.peer_id.channel_id,
+            group=channel_name,
             text=message_entity.message,
             reply=reply_,
             reply_to=reply_to_
