@@ -58,7 +58,7 @@ def run_sml_pipeline(country):
     pipe.transform.set_classifier(type="setfit",
                                   model="rodekruis/sml-ukr-message-classifier",
                                   lang="en")
-    messages = pipe.transform.process_messages(messages, translate=False, classify=False)
+    messages = pipe.transform.process_messages(messages, translate=True, classify=True)
     logging.info(f"processed {len(messages)} messages!")
 
     pipe.load.set_storage("Azure SQL Database")
