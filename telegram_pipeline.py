@@ -69,7 +69,7 @@ def run_sml_pipeline(country):
         tags={"Country": country_code}
     )
     logging.info(f"saved {len(messages)} messages!")
-    
+
     # add member counts
     telegram_client = TelegramClient(
         StringSession(os.getenv('STRING_SESSION')),
@@ -114,8 +114,8 @@ async def save_membercount(telegram_client, settings, country, end_date):
     df_member_counts_all = pd.concat([df_member_counts_old, df_member_counts]).reset_index(drop=True)
     df_member_counts_all = df_member_counts_all.drop(columns=['index', 'id'])
     df_member_counts_all.to_csv('membercount.csv', index=False, encoding="utf-8")
-    with open('membercount.csv', "rb") as upload_file:
-        blob_client.upload_blob(upload_file, overwrite=True)
+    # with open('membercount.csv', "rb") as upload_file:
+    #     blob_client.upload_blob(upload_file, overwrite=True)
     if os.path.exists('membercount.csv'):
         os.remove('membercount.csv')
     

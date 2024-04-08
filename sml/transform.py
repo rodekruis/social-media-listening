@@ -150,7 +150,7 @@ class Transform:
             "to_lang": translator["to_lang"],
         }
         translator_engine = translator["engine"]
-        if pd.isna(text):
+        if pd.isna(text) or text=="":
             return translation_data
 
         if self.translator_name == "Opus-MT":
@@ -181,7 +181,7 @@ class Transform:
                 except Exception as e:
                     logging.error(e)
                     sleep(10)
-
+        
         if translation_data['text'] == text:
             logging.warning("Translator returned identical message, check configuration.")
         return translation_data

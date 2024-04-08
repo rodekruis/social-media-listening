@@ -259,8 +259,9 @@ class Extract:
                         wait_time=5
                 ):
                     message = self._from_telegram(raw_message, channel)
-                    all_messages.append(message)
-                    channel_count += 1
+                    if message.text != "":
+                        all_messages.append(message)
+                        channel_count += 1
                     if time.time() >= time_out:
                         logging.info(f"time_out channel {channel} at {time.time()}")
                         break
@@ -278,8 +279,9 @@ class Extract:
                                         wait_time=5
                                 ):
                                     reply = self._from_telegram(raw_reply, channel)
-                                    all_messages.append(reply)
-                                    channel_count += 1
+                                    if reply.text != "":
+                                        all_messages.append(reply)
+                                        channel_count += 1
                             except Exception as e:
                                 logging.info(f"getting replies for {message.id} failed: {e}")
             except Exception as e:
