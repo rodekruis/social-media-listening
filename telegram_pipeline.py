@@ -98,7 +98,7 @@ async def save_membercount(telegram_client, settings, country, end_date):
         df_member_counts.at[idx, 'source'] = channel
         member_count = channel_full_info.full_chat.participants_count
         df_member_counts.at[idx, 'member_count'] = member_count
-        df_member_counts.at[idx, 'date'] = end_date.strftime("%m %d %Y")
+        df_member_counts.at[idx, 'date'] = end_date.strftime("%d %m %Y")
         df_member_counts.at[idx, 'country'] = settings[country]['country-code'].lower()
         df_member_counts.at[idx, 'source_id'] = channel
     
