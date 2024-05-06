@@ -299,7 +299,9 @@ class Load:
             name=dataset_name,
             workspace=self.secrets.get_secret("ARGILLA_WORKSPACE"),
             tags=tags,
-            batch_size=250
+            batch_size=250,
+            num_threads=0,
+            max_retries=10
         )
 
     def _save_to_db(self, data):
