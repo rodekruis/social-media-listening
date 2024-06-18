@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import pandas as pd
 import os
+from typing import List
 from azure.storage.blob import BlobServiceClient
 import logging
 import pyodbc
@@ -8,27 +9,21 @@ import sqlalchemy as db
 import urllib
 import ast
 import argilla as rg
-import numpy as np
+import azure.cosmos.cosmos_client as cosmos_client
+from azure.cosmos.exceptions import CosmosResourceExistsError
+from datasets import Dataset
 import re
 from sml.secrets import Secrets
 from sml.message import Message
+from typing import List
+from datasets.utils.logging import disable_progress_bar
+disable_progress_bar()
 
-supported_storages = ["local", "Azure SQL Database", "Azure Blob Storage"]
-
-
-def _messages_to_df(messages):
-    df_messages = pd.DataFrame.from_records([msg.to_dict() for msg in messages])
-    df_messages["info"] = df_messages["info"].apply(lambda x: str(x))
-    df_messages["translations"] = df_messages["translations"].apply(lambda x: str(x))
-    df_messages["classifications"] = df_messages["classifications"].apply(lambda x: str(x))
-    df_messages["datetime_"] = df_messages["datetime_"].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
-    return df_messages
+supported_storages = ["local", "Azure SQL Database", "Azure Blob Storage", "Azure Cosmos DB"]
 
 
 class Load:
-    """
-    load data from/into a data storage
-    """
+    """ Download/upload data from/to a data storage """
 
     def __init__(self, secrets: Secrets = None):
         self.storage = "local"
@@ -37,6 +32,7 @@ class Load:
             self.set_secrets(secrets)
 
     def set_secrets(self, secrets):
+        """ Set secrets for storage """
         if not isinstance(secrets, Secrets):
             raise TypeError(f"invalid format of secrets, use secrets.Secrets")
         missing_secrets = []
@@ -58,6 +54,15 @@ class Load:
                     "connection_string"
                 ]
             )
+        if self.storage == "Azure Cosmos DB":
+            missing_secrets = secrets.check_secrets(
+                [
+                    "COSMOS_URL",
+                    "COSMOS_KEY",
+                    "COSMOS_DATABASE",
+                    "COSMOS_CONTAINER"
+                ]
+            )
         if missing_secrets:
             raise Exception(f"Missing secret(s) {', '.join(missing_secrets)} for storage {self.storage}")
         else:
@@ -65,6 +70,7 @@ class Load:
             return self
 
     def set_storage(self, storage_name, secrets: Secrets = None):
+        """ Set storage to save/load data """
         if storage_name is not None:
             if storage_name not in supported_storages:
                 raise ValueError(f"Storage {storage_name} is not supported."
@@ -82,17 +88,6 @@ class Load:
             self.set_secrets(self.secrets)
         return self
 
-    def save_wordfrequencies(self, frequencies, directory, filename):
-
-        if self.storage == "local":
-            # save locally
-            os.makedirs(f"{directory}", exist_ok=True)
-            frequencies_path = f"./{directory}/{filename}.csv"
-            frequencies.to_csv(frequencies_path, index=False, encoding="utf-8")
-        else:
-            raise ValueError(f"storage {self.storage} is not supported."
-                             f"Supported storages are {supported_storages}")
-
     def get_messages(self,
                      local_path=None,
                      blob_path=None,
@@ -101,6 +96,7 @@ class Load:
                      country=None,
                      source=None
                      ):
+        """ Download messages from storage """
         if self.storage is None:
             raise RuntimeError("Storage not specified, use set_storage()")
         df_messages = pd.DataFrame()
@@ -117,15 +113,20 @@ class Load:
                 raise Exception(f"Please specify country to query Azure SQL Database")
             if source is None:
                 raise Exception(f"Please specify source to query Azure SQL Database")
-            df_messages = self._read_db(start_date, end_date, country, source)
+            df_messages = self._get_from_sql(start_date, end_date, country, source)
         elif self.storage == "Azure Blob Storage":
             local_directory = local_path[:local_path.rfind("/")]
             os.makedirs(local_directory, exist_ok=True)
             try:
-                self._download_blob(local_path, blob_path)
+                self._get_from_blob(local_path, blob_path)
             except Exception as e:
                 logging.error(f"Failed downloading from Azure Blob Service: {e}")
             df_messages = pd.read_csv(local_path)
+        elif self.storage == "Azure Cosmos DB":
+            try:
+                df_messages = self._get_from_cosmos()
+            except Exception as e:
+                logging.error(f"Failed downloading from Azure Blob Service: {e}")
 
         # Convert dataframe of messages to list of message objects
         messages = []
@@ -160,13 +161,12 @@ class Load:
         return messages
 
     def save_messages(self, messages, local_path=None, blob_path=None):
+        """ Upload messages to storage """
         if self.storage is None:
             raise RuntimeError("Storage not specified, use set_storage()")
-        # Read messages to dataframe
-        df_messages = _messages_to_df(messages)
 
         if self.storage == "local":
-            # save locally
+            df_messages = self._messages_to_df(messages)
             if not local_path.endswith('.csv'):
                 os.makedirs(local_path, exist_ok=True)
                 local_path = os.path.join(local_path, 'messages.csv')
@@ -174,16 +174,19 @@ class Load:
             logging.info(f"Successfully saved messages at {local_path}")
 
         elif self.storage == "Azure Blob Storage":
-            # save locally
-            local_directory = local_path[:local_path.rfind("/")]
-            os.makedirs(local_directory, exist_ok=True)
-            df_messages.to_csv(local_path, index=False, encoding="utf-8")
             try:
-                self._upload_blob(local_path, blob_path)
+                self._save_to_blob(messages, local_path, blob_path)
             except Exception as e:
                 logging.error(f"Failed uploading to Azure Blob Service: {e}")
-
+        
+        elif self.storage == "Azure Cosmos DB":
+            try:
+                self._save_to_cosmos(messages)
+            except Exception as e:
+                logging.error(f"Failed uploading to Azure Cosmos DB: {e}")
+                
         elif self.storage == "Azure SQL Database":
+            df_messages = self._messages_to_df(messages)
             if df_messages['datetime_'].isnull().values.any():
                 raise ValueError(f"Please specify datetime_ before saving to Azure SQL Database")
             if df_messages['country'].isnull().values.any():
@@ -192,11 +195,13 @@ class Load:
                 raise ValueError("Please specify source before saving to Azure SQL Database")
             # save to Azure SQL Database
             try:
-                self._save_to_db(df_messages)
+                self._save_to_sql(df_messages)
             except Exception as e:
-                logging.error(f"Failed storing in Azure SQL Database: {e}")
-
+                logging.error(f"Failed uploading to Azure SQL Database: {e}")
+            
     def push_to_argilla(self, messages, dataset_name, tags=None):
+        """ Save messages to Argilla """
+        
         # init argilla
         rg.init(
             api_url=self.secrets.get_secret("ARGILLA_API_URL"),
@@ -227,11 +232,6 @@ class Load:
         topics = [classification['class'] for message in messages for classification in message.classifications]
         topics = set(topics)
 
-        # Determine to read probability
-        read_prod = 2000 / len(messages)
-        if read_prod > 1:
-            read_prod = 1
-
         records = []
         for ix, message in enumerate(messages):
             # Check if there is a message text
@@ -256,7 +256,7 @@ class Load:
             inputs['Message number'] = ix + 1
             inputs['Channel'] = message.group
 
-            # check if message is red cross
+            # check if message is about the red cross
             red_cross = "No"
             for word in rc_keywords:
                 if len(word.split()) > 1:
@@ -276,8 +276,8 @@ class Load:
                     multi_label=True,
                     metadata={
                         'channel': message.group,
+                        'channel members': message.info['group_members'] if 'group_members' in message.info else None,
                         'source': message.source,
-                        'to read': np.random.choice(['yes', 'no'], size=1, p=[read_prod, 1 - read_prod])[0],
                         'number': ix + 1,
                         "Red Cross": red_cross
                     },
@@ -303,8 +303,52 @@ class Load:
             num_threads=0,
             max_retries=10
         )
+    
+    def _save_to_cosmos(self, messages: List[Message]):
+        """ Save messages to Cosmos DB """
+        client_ = cosmos_client.CosmosClient(
+            self.secrets.get_secret("COSMOS_URL"),
+            {'masterKey': self.secrets.get_secret("COSMOS_KEY")},
+            user_agent="sml-api",
+            user_agent_overwrite=True
+        )
+        cosmos_db = client_.get_database_client(self.secrets.get_secret("COSMOS_DATABASE"))
+        cosmos_container_client = cosmos_db.get_container_client(self.secrets.get_secret("COSMOS_CONTAINER"))
+        for message in messages:
+            record = message.to_dict()
+            record['id'] = str(record.pop('id_'))
+            cosmos_container_client.upsert_item(body=record)
+        
+    def _get_blob_service_client(self, blob_path: str):
+        blob_service_client = BlobServiceClient.from_connection_string(self.secrets.get_secret("connection_string"))
+        container = self.secrets.get_secret("container")
+        return blob_service_client.get_blob_client(container=container, blob=blob_path)
 
-    def _save_to_db(self, data):
+    def _save_to_blob(self, messages: List[Message], local_path: str, file_dir_blob: str):
+        """ Save messages to Azure Blob Storage """
+        # save locally
+        df_messages = self._messages_to_df(messages)
+        local_directory = local_path[:local_path.rfind("/")]
+        os.makedirs(local_directory, exist_ok=True)
+        df_messages.to_csv(local_path, index=False, encoding="utf-8")
+        # upload to Azure Blob Storage
+        blob_client = self._get_blob_service_client(file_dir_blob)
+        with open(local_path, "rb") as upload_file:
+            blob_client.upload_blob(upload_file, overwrite=True)
+        if os.path.exists(local_path):
+            os.remove(local_path)
+        logging.info("Successfully uploaded to Azure Blob Storage")
+
+    def _get_from_blob(self, local_path: str, blob_path: str):
+        """ Get messages from Azure Blob Storage """
+        blob_client = self._get_blob_service_client(blob_path)
+
+        with open(local_path, "wb") as download_file:
+            download_file.write(blob_client.download_blob().readall())
+        logging.info("Successfully downloaded from Azure Blob Storage")
+
+    def _save_to_sql(self, data: pd.DataFrame):
+        """ Save messages to Azure SQL """
         data_final = self._prepare_messages_for_db(data)
         current_datetime = datetime.now()
         db_table_name = self.secrets.get_secret("TABLE_NAME")
@@ -349,7 +393,7 @@ class Load:
         else:
             logging.info(f"All scraped messages already existing in table {db_table_name}")
 
-    def _read_db(self, start_date, end_date, country, source):
+    def _get_from_sql(self, start_date, end_date, country, source):
         # Connect to db
         db_table_name = self.secrets.get_secret("TABLE_NAME")
         db_schema = self.secrets.get_secret("TABLE_SCHEMA")
@@ -384,6 +428,27 @@ class Load:
             logging.info("AZ Database connection is closed")
         return df_messages
 
+    def _get_from_cosmos(self):
+        """ Get messages from Cosmos DB """
+        client_ = cosmos_client.CosmosClient(
+            self.secrets.get_secret("COSMOS_URL"),
+            {'masterKey': self.secrets.get_secret("COSMOS_KEY")},
+            user_agent="sml-api",
+            user_agent_overwrite=True
+        )
+        cosmos_db = client_.get_database_client(self.secrets.get_secret("COSMOS_DATABASE"))
+        cosmos_container_client = cosmos_db.get_container_client(self.secrets.get_secret("COSMOS_CONTAINER"))
+        query = "SELECT * FROM c"
+        records = cosmos_container_client.query_items(
+            query=query,
+            enable_cross_partition_query=True
+        )
+        data = []
+        for record in records:
+            data.append(record)
+        df = pd.DataFrame.from_dict(data)
+        return df
+
     def _prepare_messages_for_db(self, data):
         # Prepare for storing in Azure db
         data['datetime_'] = pd.to_datetime(data['datetime_'], format='%Y-%m-%d %H:%M:%S')
@@ -400,7 +465,7 @@ class Load:
         country = data['country'].unique()[0]
         source = data['source'].unique()[0]
 
-        data_in_db = self._read_db(start_date, end_date, country, source)
+        data_in_db = self._get_from_sql(start_date, end_date, country, source)
 
         if data_in_db is not None and not data_in_db.empty:
             # Make sure format of new data and data in database are the same
@@ -429,24 +494,6 @@ class Load:
 
         return data_final
 
-    def _get_blob_service_client(self, blob_path):
-        blob_service_client = BlobServiceClient.from_connection_string(self.secrets.get_secret("connection_string"))
-        container = self.secrets.get_secret("container")
-        return blob_service_client.get_blob_client(container=container, blob=blob_path)
-
-    def _upload_blob(self, local_path, file_dir_blob):
-        blob_client = self._get_blob_service_client(file_dir_blob)
-        with open(local_path, "rb") as upload_file:
-            blob_client.upload_blob(upload_file, overwrite=True)
-        logging.info("Successfully uploaded to Azure Blob Storage")
-
-    def _download_blob(self, local_path, blob_path):
-        blob_client = self._get_blob_service_client(blob_path)
-
-        with open(local_path, "wb") as download_file:
-            download_file.write(blob_client.download_blob().readall())
-        logging.info("Successfully downloaded from Azure Blob Storage")
-
     def _connect_to_db(self):
         # Connect to db
         try:
@@ -466,3 +513,12 @@ class Load:
             return engine, connection
         except pyodbc.Error as error:
             logging.info("Failed to connect to database {}".format(error))
+    
+    def _messages_to_df(self, messages: List[Message]):
+        """ Convert a list of Message objects to a pandas DataFrame """
+        df_messages = pd.DataFrame.from_records([msg.to_dict() for msg in messages])
+        df_messages["info"] = df_messages["info"].apply(lambda x: str(x))
+        df_messages["translations"] = df_messages["translations"].apply(lambda x: str(x))
+        df_messages["classifications"] = df_messages["classifications"].apply(lambda x: str(x))
+        df_messages["datetime_"] = df_messages["datetime_"].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
+        return df_messages
