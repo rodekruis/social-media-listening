@@ -13,12 +13,14 @@ packages = [{include = "sml"}]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
-argilla = "^1.21"
+argilla = "^1.28"
 azure-common = "*"
 azure-identity = "*"
 azure-keyvault-secrets = "*"
 azure-storage-blob = "*"
+azure-cosmos = "*"
 click = "*"
+datasets = "*"
 geopandas = "*"
 google-cloud-translate = "*"
 pandas = "*"
