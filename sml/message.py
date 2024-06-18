@@ -85,8 +85,8 @@ class Message:
     def to_dict(self):
         return {
             'id_': self.id_,
-            'datetime_': self.datetime_,
-            'datetime_scraped_': self.datetime_scraped_,
+            'datetime_': self.datetime_.strftime('%Y-%m-%dT%H:%M:%S'),
+            'datetime_scraped_': self.datetime_scraped_.strftime('%Y-%m-%dT%H:%M:%S'),
             'country': self.country,
             'source': self.source,
             'group': self.group,
