@@ -248,9 +248,15 @@ class Extract:
             channel_count = 0
             
             logging.info(f"starting telegram channel {channel} at {time.time()}")
+            
             try:
                 channel_entity = await telegram_client.get_entity(channel)
-                # scrape posts
+                
+                # get number of channel members
+                channel_full_info = await telegram_client(GetFullChannelRequest(channel=channel_entity))
+                channel_members = channel_full_info.full_chat.participants_count
+                
+                # scrape messages
                 replied_post_id = []
                 async for raw_message in telegram_client.iter_messages(
                         channel_entity,
@@ -258,7 +264,7 @@ class Extract:
                         reverse=True,
                         wait_time=5
                 ):
-                    message = self._from_telegram(raw_message, channel)
+                    message = self._from_telegram(raw_message, channel, channel_members)
                     if message.text != "":
                         all_messages.append(message)
                         channel_count += 1
@@ -278,7 +284,7 @@ class Extract:
                                         reply_to=post_id,
                                         wait_time=5
                                 ):
-                                    reply = self._from_telegram(raw_reply, channel)
+                                    reply = self._from_telegram(raw_reply, channel, channel_members)
                                     if reply.text != "":
                                         all_messages.append(reply)
                                         channel_count += 1
@@ -291,7 +297,7 @@ class Extract:
         telegram_client.disconnect()
         return all_messages
     
-    def _from_telegram(self, message_entity, channel_name):
+    def _from_telegram(self, message_entity, channel_name, channel_members=0):
         if not message_entity.reply_to:
             reply_ = False
             reply_to_ = None
@@ -307,7 +313,8 @@ class Extract:
             group=channel_name,
             text=message_entity.message,
             reply=reply_,
-            reply_to=reply_to_
+            reply_to=reply_to_,
+            info={"group_members": channel_members}
         )
     
     def _deduplicate(self, object_list):
