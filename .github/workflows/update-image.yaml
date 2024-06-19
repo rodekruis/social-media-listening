@@ -3,7 +3,7 @@ name: Update SML docker image in ACR
 on:
   push:
     branches:
-      - refactoring
+      - master
     
 env:
   IMAGE_NAME: social-media-listening
