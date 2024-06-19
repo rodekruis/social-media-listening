@@ -99,12 +99,15 @@ class Load:
         """ Download messages from storage """
         if self.storage is None:
             raise RuntimeError("Storage not specified, use set_storage()")
-        df_messages = pd.DataFrame()
+        messages = []
         if self.storage == "local":
             # load locally
+            if local_path is None:
+                raise RuntimeError("Local path not specified, provide path to local .csv file")
             if not local_path.endswith('.csv'):
                 local_path = os.path.join(local_path, 'messages.csv')
             df_messages = pd.read_csv(local_path)
+            messages = self._df_to_messages(df_messages)
         elif self.storage == "Azure SQL Database":
             # load from Azure SQL Database
             if start_date is None or end_date is None:
@@ -114,6 +117,7 @@ class Load:
             if source is None:
                 raise Exception(f"Please specify source to query Azure SQL Database")
             df_messages = self._get_from_sql(start_date, end_date, country, source)
+            messages = self._df_to_messages(df_messages)
         elif self.storage == "Azure Blob Storage":
             local_directory = local_path[:local_path.rfind("/")]
             os.makedirs(local_directory, exist_ok=True)
@@ -122,42 +126,12 @@ class Load:
             except Exception as e:
                 logging.error(f"Failed downloading from Azure Blob Service: {e}")
             df_messages = pd.read_csv(local_path)
+            messages = self._df_to_messages(df_messages)
         elif self.storage == "Azure Cosmos DB":
             try:
-                df_messages = self._get_from_cosmos()
+                messages = self._get_from_cosmos(start_date, end_date, country, source)
             except Exception as e:
-                logging.error(f"Failed downloading from Azure Blob Service: {e}")
-
-        # Convert dataframe of messages to list of message objects
-        messages = []
-        for idx, row in df_messages.iterrows():
-            # Initiate Message objects with mandatory fields
-            try:
-                message = Message(
-                    row['id_'],
-                    row['datetime_'],
-                    row['datetime_scraped_'],
-                    row['country'],
-                    row['source'],
-                    row['text'],
-                )
-            except Exception:
-                raise ValueError("Mandatory fields of message missing")
-            # Add optional fields
-            if row['group']:
-                message.group = row['group']
-            if row['reply']:
-                message.reply = row['reply']
-            if row['reply_to']:
-                message.reply_to = row['reply_to']
-            if row['classifications']:
-                message.classifications = ast.literal_eval(row['classifications'])
-            if row['translations']:
-                message.translations = ast.literal_eval(row['translations'])
-            if row['info']:
-                message.info = ast.literal_eval(row['info'])
-            messages.append(message)
-
+                logging.error(f"Failed downloading from Azure Cosmos DB: {e}")
         return messages
 
     def save_messages(self, messages, local_path=None, blob_path=None):
@@ -348,7 +322,7 @@ class Load:
         logging.info("Successfully downloaded from Azure Blob Storage")
 
     def _save_to_sql(self, data: pd.DataFrame):
-        """ Save messages to Azure SQL """
+        """ Save messages to Azure SQL Database """
         data_final = self._prepare_messages_for_db(data)
         current_datetime = datetime.now()
         db_table_name = self.secrets.get_secret("TABLE_NAME")
@@ -394,6 +368,7 @@ class Load:
             logging.info(f"All scraped messages already existing in table {db_table_name}")
 
     def _get_from_sql(self, start_date, end_date, country, source):
+        """ Get messages from Azure SQL Database """
         # Connect to db
         db_table_name = self.secrets.get_secret("TABLE_NAME")
         db_schema = self.secrets.get_secret("TABLE_SCHEMA")
@@ -428,7 +403,7 @@ class Load:
             logging.info("AZ Database connection is closed")
         return df_messages
 
-    def _get_from_cosmos(self):
+    def _get_from_cosmos(self, start_date, end_date, country, source):
         """ Get messages from Cosmos DB """
         client_ = cosmos_client.CosmosClient(
             self.secrets.get_secret("COSMOS_URL"),
@@ -438,16 +413,41 @@ class Load:
         )
         cosmos_db = client_.get_database_client(self.secrets.get_secret("COSMOS_DATABASE"))
         cosmos_container_client = cosmos_db.get_container_client(self.secrets.get_secret("COSMOS_CONTAINER"))
-        query = "SELECT * FROM c"
+        query = 'SELECT * FROM c WHERE '
+        if start_date is not None:
+            query += f'c.datetime_ >= "{start_date.strftime("%Y-%m-%dT%H:%M:%S")}" '
+        if end_date is not None:
+            query += f'AND c.datetime_ <= "{end_date.strftime("%Y-%m-%dT%H:%M:%S")}" '
+        if country is not None:
+            query += f'AND c.country = "{country}" '
+        if source is not None:
+            query += f'AND c.source = "{source}" '
+        if query.endswith("WHERE "):
+            query = query.replace("WHERE ", "")
+        query = query.replace("WHERE AND", "WHERE")
+        print(f"QUERY: {query}")
         records = cosmos_container_client.query_items(
             query=query,
-            enable_cross_partition_query=True
+            enable_cross_partition_query=True if country is None else None  # country must be the partition key
         )
-        data = []
+        messages = []
         for record in records:
-            data.append(record)
-        df = pd.DataFrame.from_dict(data)
-        return df
+            message = Message(
+                record['id'],
+                record['datetime_'],
+                record['datetime_scraped_'],
+                record['country'],
+                record['source'],
+                record['text'],
+                record['group'] if 'group' in record else None,
+                record['reply'] if 'reply' in record else None,
+                record['reply_to'] if 'reply_to' in record else None,
+                record['translations'] if 'translations' in record else None,
+                record['info'] if 'info' in record else None,
+                record['classifications'] if 'classifications' in record else None
+            )
+            messages.append(message)
+        return messages
 
     def _prepare_messages_for_db(self, data):
         # Prepare for storing in Azure db
@@ -522,3 +522,35 @@ class Load:
         df_messages["classifications"] = df_messages["classifications"].apply(lambda x: str(x))
         df_messages["datetime_"] = df_messages["datetime_"].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
         return df_messages
+    
+    def _df_to_messages(self, df_messages: pd.DataFrame):
+        """ Convert dataframe to list of Message objects """
+        messages = []
+        for idx, row in df_messages.iterrows():
+            # Initiate Message objects with mandatory fields
+            try:
+                message = Message(
+                    row['id_'],
+                    row['datetime_'],
+                    row['datetime_scraped_'],
+                    row['country'],
+                    row['source'],
+                    row['text'],
+                )
+            except Exception:
+                raise ValueError("Mandatory fields of message missing")
+            # Add optional fields
+            if row['group']:
+                message.group = row['group']
+            if row['reply']:
+                message.reply = row['reply']
+            if row['reply_to']:
+                message.reply_to = row['reply_to']
+            if row['classifications']:
+                message.classifications = ast.literal_eval(row['classifications'])
+            if row['translations']:
+                message.translations = ast.literal_eval(row['translations'])
+            if row['info']:
+                message.info = ast.literal_eval(row['info'])
+            messages.append(message)
+        return messages
