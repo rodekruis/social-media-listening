@@ -2,7 +2,9 @@ from sml.extract import Extract
 from sml.transform import Transform
 from sml.load import Load
 from sml.secrets import Secrets
+from sml.message import Message
 from datetime import datetime, timedelta
+from typing import List
 
 
 class Pipeline:
@@ -34,3 +36,6 @@ class Pipeline:
             self.transform.process_messages(messages=self.messages)
         if save_output:
             self.load.save_messages(messages=self.messages)
+            
+    def set_messages(self, messages: List[Message]):
+        self.messages = messages
