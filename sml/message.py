@@ -1,5 +1,6 @@
 from datetime import datetime
 import pandas as pd
+from typing import List
 
 
 class Message:
@@ -48,18 +49,18 @@ class Message:
         else:
             self.classifications = classifications
 
-    def add_translation(self, dict_):
+    def add_translation(self, dict_: dict):
         if type(dict_) is not dict:
             raise TypeError("Translation must be a dictionary")
-        if list(dict_.keys()) != ['text', 'from_lang', 'to_lang']:
+        if not all(key in list(dict_.keys()) for key in ['text', 'from_lang', 'to_lang']):
             raise KeyError("Translation must contain the keys 'text', 'from_lang', 'to_lang'")
         self.translations.append(dict_)
 
-    def set_translation(self, dict_):
+    def set_translation(self, dict_: dict):
         if type(dict_) is not dict:
             raise TypeError("Translation must be a dictionary")
-        if list(dict_.keys()) != ['text', 'from_lang', 'to_lang']:
-            raise KeyError("Translation must contain the keys 'text', 'from_lang', 'to_lang'")
+        if not all(key in list(dict_.keys()) for key in ['text', 'from_lang', 'to_lang']):
+            raise KeyError("Translation must contain keys 'text', 'from_lang', and 'to_lang'")
         translation_found = False
         for ix, trans in enumerate(self.translations):
             if dict_['to_lang'] == trans['to_lang'] and dict_['from_lang'] == trans['from_lang']:
@@ -68,12 +69,15 @@ class Message:
         if not translation_found:
             self.translations.append(dict_)
 
-    def add_classification(self, dict_list):
-        if type(dict_list) is not list:
-            raise TypeError("Classification must be a list of dictionaries")
+    def add_classification(self, dict_: dict):
+        if not all(key in list(dict_.keys()) for key in ['topic', 'score', 'agent']):
+            raise KeyError("Classification must contain keys 'topic', 'score', and 'agent'")
+        self.classifications.append(dict_)
+
+    def add_classifications(self, dict_list: List[dict]):
         for dict_ in dict_list:
-            if list(dict_.keys()) != ['class', 'score']:
-                raise KeyError("Classification must contain the keys 'class', 'score'")
+            if not all(key in list(dict_.keys()) for key in ['topic', 'score', 'agent']):
+                raise KeyError("Classification must contain keys 'topic', 'score', and 'agent'")
         self.classifications.extend(dict_list)
 
     def add_location(self, name, lon, lat):
