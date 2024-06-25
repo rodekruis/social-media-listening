@@ -260,20 +260,20 @@ class Transform:
             if self.classifier_task == "sentiment-analysis":
                 result = self.classifier(text)[0]
                 classification_data = [
-                    {'class': result['label'], 'score': result['score']},
-                    {'class': 'POSITIVE' if result['label'] == 'NEGATIVE' else 'NEGATIVE', 'score': 1.-result['score']}
+                    {'topic': result['label'], 'score': result['score'], 'agent': 'model'},
+                    {'topic': 'POSITIVE' if result['label'] == 'NEGATIVE' else 'NEGATIVE', 'score': 1.-result['score'], 'agent': 'model'}
                 ]
             if self.classifier_task == "zero-shot-classification":
                 result = self.classifier(sequences=text, candidate_labels=self.class_labels, multi_label=True)
                 for label, score in zip(result['labels'], result['scores']):
-                    classification_data.append({'class': label, 'score': score})
+                    classification_data.append({'topic': label, 'score': score, 'agent': 'model'})
             
         if self.classifier_type == "setfit":
             scores = self.classifier.predict_proba([text]).numpy()[0]
             with open(os.path.join(self.classifier_model, "label_dict.json")) as infile:
                 label_dict = json.load(infile)
                 for ix, score in enumerate(scores):
-                    classification_data.append({"class": label_dict[str(ix)], "score": score})
+                    classification_data.append({'topic': label_dict[str(ix)], "score": score, 'agent': 'model'})
 
         if not classification_data:
             logging.warning("Classifier returned no results, check configuration")
@@ -288,8 +288,8 @@ class Transform:
             logging.warning(f"Classifier language is {self.classifier_lang}, but no corresponding translation was found"
                             f" in message. Classifying original text.")
             text = message.text
-        classification = self.classify_text(text)
-        message.add_classification(classification)
+        classifications = self.classify_text(text)
+        message.add_classifications(classifications)
         return message
 
     def set_anonymizer(self, name: str = None, lang: str = None):
