@@ -189,29 +189,36 @@ class Extract:
         
         # save temp
         if self.store_temp:
-            self._save_temp(df_messages, 'tweets')
+            self._save_temp(df_messages, 'messages')
         
         return all_messages
     
     def get_data_kobo(self):
         url = f'{self.secrets["KOBO_URL"]}/api/v2/assets/{self.secrets["KOBO_ASSET"]}/data.json'
         headers = {'Authorization': f'Token {self.secrets["KOBO_TOKEN"]}'}
-        data_request = requests.get(url,
-                                    headers=headers)
-        data = data_request.json()['results']
-        df_form = pd.DataFrame(data)
-        
-        all_messages = []
-        for idx, row in df_form.iterrows():
+        data_request = requests.get(url, headers=headers)
+        records = data_request.json()['results']
+        messages = []
+        for record in records:
             # TBI: update mapping df to list of dict
-            message = Message.from_kobo(row)
-            all_messages.append(message)
+            message = Message(
+                id_=record['_id'],
+                datetime_=record['_submission_time'],
+                datetime_scraped_=datetime.today(),
+                country=self.country,
+                source="Kobo",
+                text=record['text'],
+                group=record['group'],
+                info={"kobo_asset": self.secrets["KOBO_ASSET"]}
+            )
+            messages.append(message)
         
         # save temp
         if self.store_temp:
-            self._save_temp(df_form, 'form')
+            df_messages = pd.DataFrame([x.to_dict() for x in messages])
+            self._save_temp(df_messages, 'messages')
         
-        return all_messages
+        return messages
     
     def get_data_telegram(self):
         telegram_client = TelegramClient(
@@ -221,23 +228,23 @@ class Extract:
         )
         
         # loop = asyncio.get_event_loop()
-        all_messages = telegram_client.loop.run_until_complete(
-            self._scrape_messages(telegram_client,
+        messages = telegram_client.loop.run_until_complete(
+            self._scrape_telegram(telegram_client,
                                   self.channels,
                                   self.start_date)
         )
         
         # drop duplicates
-        all_messages = self._deduplicate(all_messages)
+        messages = self._deduplicate(messages)
         
         # save temp
-        df_messages = pd.DataFrame([x.to_dict() for x in all_messages])
         if self.store_temp:
+            df_messages = pd.DataFrame([x.to_dict() for x in messages])
             self._save_temp(df_messages, 'messages')
         
-        return all_messages
+        return messages
     
-    async def _scrape_messages(self, telegram_client, telegram_channels, start_date):
+    async def _scrape_telegram(self, telegram_client, telegram_channels, start_date):
         
         await telegram_client.connect()
         all_messages = []
