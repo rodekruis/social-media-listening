@@ -8,6 +8,7 @@ import pyodbc
 import sqlalchemy as db
 import urllib
 import ast
+import json
 import argilla as rg
 import azure.cosmos.cosmos_client as cosmos_client
 from azure.cosmos.exceptions import CosmosResourceExistsError
@@ -100,6 +101,7 @@ class Load:
         if self.storage is None:
             raise RuntimeError("Storage not specified, use set_storage()")
         messages = []
+        
         if self.storage == "local":
             # load locally
             if local_path is None:
@@ -108,6 +110,7 @@ class Load:
                 local_path = os.path.join(local_path, 'messages.csv')
             df_messages = pd.read_csv(local_path)
             messages = self._df_to_messages(df_messages)
+            
         elif self.storage == "Azure SQL Database":
             # load from Azure SQL Database
             if start_date is None or end_date is None:
@@ -118,6 +121,7 @@ class Load:
                 raise Exception(f"Please specify source to query Azure SQL Database")
             df_messages = self._get_from_sql(start_date, end_date, country, source)
             messages = self._df_to_messages(df_messages)
+            
         elif self.storage == "Azure Blob Storage":
             local_directory = local_path[:local_path.rfind("/")]
             os.makedirs(local_directory, exist_ok=True)
@@ -127,6 +131,7 @@ class Load:
                 logging.error(f"Failed downloading from Azure Blob Service: {e}")
             df_messages = pd.read_csv(local_path)
             messages = self._df_to_messages(df_messages)
+            
         elif self.storage == "Azure Cosmos DB":
             try:
                 messages = self._get_from_cosmos(start_date, end_date, country, source)
@@ -173,7 +178,8 @@ class Load:
             except Exception as e:
                 logging.error(f"Failed uploading to Azure SQL Database: {e}")
             
-    def push_to_argilla(self, messages, dataset_name, tags=None):
+    def save_to_argilla(self, messages: List[Message], dataset_name: str, tags: List[str] = None,
+                        label_schema: List[str] = None, replace: bool = True):
         """ Save messages to Argilla """
         
         # init argilla
@@ -202,9 +208,35 @@ class Load:
                 unique_messages.append(message)
         messages = unique_messages.copy()
 
-        # Get topics
-        topics = [classification['class'] for message in messages for classification in message.classifications]
+        # get topics
+        topics = [classification['topic'] for message in messages for classification in message.classifications]
         topics = set(topics)
+        if not topics and not label_schema:
+            raise ValueError("No classifications found in messages, label_schema must be specified")
+        topics = label_schema
+        
+        dataset = rg.FeedbackDataset(
+            fields=[
+                rg.TextField(name="text_translated", title="Translated message", required=True, use_markdown=True),
+                rg.TextField(name="text_original", title="Original message", required=True, use_markdown=True),
+            ],
+            questions=[
+                rg.MultiLabelQuestion(
+                    name="topic",
+                    title="What is the topic of the message?",
+                    labels=topics,
+                    required=True,
+                    visible_labels=100
+                ),
+                rg.TextQuestion(
+                    name="translation",
+                    title="Re-translate the message if incorrect",
+                    use_markdown=True,
+                    required=False
+                )
+            ],
+            guidelines=None
+        )
 
         records = []
         for ix, message in enumerate(messages):
@@ -212,23 +244,25 @@ class Load:
             if not message.text:
                 continue
 
-            # Set predictions
-            if not message.classifications:
-                prediction = [(topic, 0.) for topic in topics]
-            else:
-                predicted_topics = [classification['class'] for classification in message.classifications]
-                prediction = [(classification['class'], classification['score']) for classification in
-                              message.classifications]
-                prediction += [(topic, 0.) for topic in topics if topic not in predicted_topics]
-                prediction.sort()
+            # set suggestions
+            classifications = []
+            # suggest only highest-scoring model classification
+            message_classifications = [x for x in message.classifications if x['agent'] == 'model']
+            if len(message_classifications) > 0:
+                message_classification = sorted(message_classifications, key=lambda x: x['score'], reverse=True)[0]
+                classifications.append({
+                    "question_name": "topic",
+                    "value": [message_classification['topic']],
+                    "score": [message_classification['score']],
+                    "agent": "model"
+                })
 
-            # Set translations
-            inputs = {'Original message': message.text}
+            # set translations
+            text_translated, from_lang, to_lang = '', '', ''
             if message.translations:
-                for translation in message.translations:
-                    inputs[f"Translated message"] = translation['text']
-            inputs['Message number'] = ix + 1
-            inputs['Channel'] = message.group
+                text_translated = message.translations[0]['text']
+                from_lang = message.translations[0]['from_lang']
+                to_lang = message.translations[0]['to_lang']
 
             # check if message is about the red cross
             red_cross = "No"
@@ -242,41 +276,105 @@ class Load:
                         red_cross = "Yes"
                         break
 
-            records.append(
-                rg.TextClassificationRecord(
-                    inputs=inputs,
-                    prediction=prediction,
-                    prediction_agent='sml-model-0.0.1',
-                    multi_label=True,
+            record = rg.FeedbackRecord(
+                    fields={
+                        "text_translated": text_translated,
+                        "text_original": message.text
+                    },
+                    responses=[],
+                    suggestions=classifications,
+                    external_id=message.id_,
                     metadata={
-                        'channel': message.group,
-                        'channel members': message.info['group_members'] if 'group_members' in message.info else None,
+                        'group': message.group,
+                        'group_members': message.info['group_members'] if 'group_members' in message.info else None,
                         'source': message.source,
                         'number': ix + 1,
-                        "Red Cross": red_cross
+                        'Red Cross': red_cross,
+                        'translation_from_lang': from_lang,
+                        'translation_to_lang': to_lang,
+                        'datetime': message.datetime_.strftime('%Y-%m-%dT%H:%M:%S'),
+                        'datetime_scraped': message.datetime_scraped_.strftime('%Y-%m-%dT%H:%M:%S'),
+                        'country': message.country
                     },
-                    event_timestamp=message.datetime_
-                ),
-            )
-
-        dataset = rg.DatasetForTextClassification(records)
-
-        settings = rg.TextClassificationSettings(label_schema=topics)
-        rg.configure_dataset_settings(
+                )
+            records.append(record)
+            
+        dataset.add_records(records)
+        if replace:
+            try:
+                old_dataset = rg.FeedbackDataset.from_argilla(
+                    name=dataset_name,
+                    workspace=self.secrets.get_secret("ARGILLA_WORKSPACE")
+                )
+                old_dataset.delete()
+            except ValueError:
+                pass
+        dataset.push_to_argilla(
             name=dataset_name,
-            settings=settings
+            workspace=self.secrets.get_secret("ARGILLA_WORKSPACE")
         )
 
-        # log the dataset
-        rg.log(
-            dataset,
-            name=dataset_name,
-            workspace=self.secrets.get_secret("ARGILLA_WORKSPACE"),
-            tags=tags,
-            batch_size=250,
-            num_threads=0,
-            max_retries=10
+    def get_from_argilla(self, dataset_name: str, only_submitted: bool = False):
+        """ Get messages from Argilla """
+        # init argilla
+        rg.init(
+            api_url=self.secrets.get_secret("ARGILLA_API_URL"),
+            api_key=self.secrets.get_secret("ARGILLA_API_KEY"),
+            workspace=self.secrets.get_secret("ARGILLA_WORKSPACE")
         )
+        dataset = rg.FeedbackDataset.from_argilla(dataset_name).pull(max_records=1000000).format_as("datasets")
+        messages = []
+        for record in dataset:
+            if only_submitted:
+                if not record['topic'] or record['topic'][0]['status'] == 'discarded':
+                    continue
+            else:
+                metadata = json.loads(record['metadata'])
+
+                # get translation if available
+                translations = []
+                if record['text_translated'] != '':
+                    translation = {
+                        'text': record['text_translated'],
+                        'from_lang': metadata['translation_from_lang'],
+                        'to_lang': metadata['translation_to_lang']
+                    }
+                    if record['translation']:
+                        translation['text'] = record['translation'][0]['value']
+                    translations.append(translation)
+                    
+                # get topic if available
+                classifications = []
+                if record['topic-suggestion']:
+                    classifications = [{
+                        'class': record['topic-suggestion'][0],
+                        'score': record['topic-suggestion-metadata']['score'][0],
+                        'agent': 'model'
+                    }]
+                if record['topic'] and record['topic'][0]['status'] == 'submitted':
+                    classifications.append({
+                        'class': record['topic'][0]['value'],
+                        'score': 1.,
+                        'agent': 'human'
+                    })
+                    
+                # map record to message object
+                message = Message(
+                    id_=record['external_id'],
+                    datetime_=metadata['datetime'],
+                    datetime_scraped_=metadata['datetime_scraped'],
+                    country=metadata['country'],
+                    source=metadata['source'],
+                    text=record['text_original'],
+                    group=metadata['group'],
+                    reply=False,
+                    reply_to=None,
+                    translations=translations,
+                    info={'group_members': metadata['group_members']},
+                    classifications=classifications
+                )
+                messages.append(message)
+        return messages
     
     def _save_to_cosmos(self, messages: List[Message]):
         """ Save messages to Cosmos DB """
