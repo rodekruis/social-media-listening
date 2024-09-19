@@ -1,14 +1,7 @@
 # configuration file for social-media-listening
 
-# Context and Extract
-<country1>:
-  country-code: <someISO3>
-  channels-to-track:
-  - <channel1>
-  - <channel2>
-
-<country2>:
-  country-code: <someISO3>
-  channels-to-track:
-  - <channel1>
-  - <channel2>
+NLD:  # country ISO3
+  source: telegram
+  channels:
+    - "t.me/channelX"
+    - "t.me/channelY"
