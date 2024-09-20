@@ -16,14 +16,15 @@ logging.getLogger("requests_oauthlib").setLevel(logging.WARNING)
 
 @click.command()
 @click.option("--country", type=str, required=True, help="Country ISO3")
-def run_sml_pipeline(country):
+@click.option("--days", type=int, default=14, help="How many days in the past")
+def run_sml_pipeline(country, days):
     if os.path.exists("config/config.yaml"):
         with open("config/config.yaml", "r") as f:
             settings = yaml.safe_load(f)
     else:
         settings = yaml.safe_load(os.environ["CONFIG"])
 
-    start_date = datetime.today()  # - timedelta(days=14)
+    start_date = datetime.today() - timedelta(days=days)
     end_date = datetime.today()
     country = country.upper()
 
