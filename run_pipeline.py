@@ -16,13 +16,10 @@ logging.getLogger("requests_oauthlib").setLevel(logging.WARNING)
 
 @click.command()
 @click.option("--country", type=str, required=True, help="Country ISO3")
+@click.option("--source", type=str, required=True, help="Data source")
+@click.option("--channels", type=str, required=True, help="Channels to track")
 @click.option("--days", type=int, default=14, help="How many days in the past")
-def run_sml_pipeline(country, days):
-    if os.path.exists("config/config.yaml"):
-        with open("config/config.yaml", "r") as f:
-            settings = yaml.safe_load(f)
-    else:
-        settings = yaml.safe_load(os.environ["CONFIG"])
+def run_sml_pipeline(country, source, channels, days):
 
     start_date = datetime.today() - timedelta(days=days)
     end_date = datetime.today()
@@ -32,11 +29,11 @@ def run_sml_pipeline(country, days):
     pipe = Pipeline(secrets=Secrets("credentials/.env"))
 
     logging.info(f"scraping messages")
-    pipe.extract.set_source(settings[country]["source"])
+    pipe.extract.set_source(source)
     messages = pipe.extract.get_data(
         start_date=start_date,
         country=country,
-        channels=settings[country]["channels"],
+        channels=channels.split(","),
         store_temp=False,
     )
     logging.info(f"found {len(messages)} messages!")
