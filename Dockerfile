@@ -23,6 +23,4 @@ RUN poetry install --no-root --no-interaction
 COPY credentials /credentials
 COPY sml /sml
 COPY config /config
-COPY "telegram_pipeline.py" .
-
-# ENTRYPOINT ["poetry", "run", "python", "-m", "telegram_pipeline"]
+COPY "run_pipeline.py" .
