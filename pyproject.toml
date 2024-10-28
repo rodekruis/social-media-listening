@@ -24,7 +24,7 @@ click = "*"
 datasets = "*"
 geopandas = "*"
 google-cloud-translate = "*"
-huggingface_hub = "<=0.23.5"
+huggingface_hub = "*"
 pandas = "*"
 pyodbc = "*"
 python-dotenv = "*"
@@ -39,6 +39,7 @@ torch = "*"
 tqdm = "*"
 transformers = "*"
 tweepy = "*"
+urllib3 = "<=2"
 
 [build-system]
 requires = ["poetry-core"]
