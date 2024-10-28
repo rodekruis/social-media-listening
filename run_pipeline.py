@@ -36,7 +36,9 @@ def run_sml_pipeline(country, source, channels, days):
         channels=channels.split(","),
         store_temp=False,
     )
-    messages = pipe.transform.filter_messages(messages, length=20)
+    messages = [
+        message for message in messages if len(message.text) >= 20
+    ]  # filter messages by length
     logging.info(f"found {len(messages)} messages!")
 
     pipe.transform.set_translator(

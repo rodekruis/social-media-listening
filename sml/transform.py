@@ -27,10 +27,6 @@ supported_classifier_tasks = ["sentiment-analysis", "zero-shot-classification"]
 supported_anonymizers = ["anonymization-app"]
 
 
-def filter_messages(messages, length: int = 0):
-    return [message for message in messages if len(message.text) >= length]
-
-
 class Transform:
     """
     transform data
