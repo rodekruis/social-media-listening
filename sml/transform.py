@@ -19,6 +19,7 @@ import requests
 import uuid
 import spacy
 import geopandas as gpd
+from cleantext import clean
 from sml.secrets import Secrets
 
 supported_translators = ["Opus-MT", "Google", "Microsoft"]
@@ -367,7 +368,13 @@ class Transform:
                 f"Classifier language is {self.classifier_lang}, but no corresponding translation was found"
                 f" in message. Classifying original text."
             )
-            text = message.text
+            text = clean(
+                message.text,
+                lower=False,
+                no_line_breaks=True,
+                no_urls=True,
+                no_emoji=True,
+            )
         classifications = self.classify_text(text)
         message.add_classifications(classifications)
         return message
