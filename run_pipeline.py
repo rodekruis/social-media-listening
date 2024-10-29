@@ -47,7 +47,7 @@ def run_sml_pipeline(country, source, channels, days):
         to_lang="en",
     )
     pipe.transform.set_classifier(
-        type="setfit", model="rodekruis/sml-ukr-message-classifier", lang="en"
+        type="setfit", model="rodekruis/sml-ukr-message-classifier-2", lang="en"
     )
     messages = pipe.transform.process_messages(messages, translate=True, classify=True)
     logging.info(f"processed {len(messages)} messages!")
