@@ -1,5 +1,11 @@
 # social-media-listening
-TBA
+Data pipeline to collect, analyse and store text messages from social media platforms.
+
+## Description
+
+Synopsis: a [dockerized](https://www.docker.com/get-started) [python](https://www.python.org/) application that collects
+text messages from [X](https://x.com/) and [Telegram](https://telegram.org/), translates them using [Azure AI Translator](https://azure.microsoft.com/en-us/products/ai-services/ai-translator), 
+classifies them using [custom models](https://huggingface.co/rodekruis) and saves them in [Argilla](https://argilla.io/), which is used to validate the classifications.
 
 ## Setup
 
