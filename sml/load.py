@@ -275,14 +275,14 @@ class Load:
         dataset = rg.FeedbackDataset(
             fields=[
                 rg.TextField(
-                    name="text_translated",
-                    title="Translated message",
+                    name="text_original",
+                    title="Original message",
                     required=True,
                     use_markdown=True,
                 ),
                 rg.TextField(
-                    name="text_original",
-                    title="Original message",
+                    name="text_translated",
+                    title="Translated message",
                     required=True,
                     use_markdown=True,
                 ),
@@ -293,7 +293,14 @@ class Load:
                     title="What is the topic of the message?",
                     labels=topics,
                     required=True,
-                    visible_labels=100,
+                    visible_labels=20,
+                ),
+                rg.TextQuestion(
+                    name="anonymization",
+                    title="Re-write the message if it contains personally identifiable information",
+                    description="The original message will be replaced with the new one; example: 'My name is John' -> 'My name is [name]'",
+                    use_markdown=True,
+                    required=False,
                 ),
                 rg.TextQuestion(
                     name="translation",
