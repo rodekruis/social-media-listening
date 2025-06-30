@@ -16,6 +16,9 @@ coverage
 # External code
 node_modules
 
+# Telegram sessions
+*.session
+
 # HuggingFace custom models
 rodekruis/
 
