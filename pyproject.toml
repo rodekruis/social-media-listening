@@ -39,7 +39,7 @@ torch = "*"
 tqdm = "*"
 transformers = "*"
 tweepy = "*"
-urllib3 = "<=2"
+urllib3 = "<=2.6.0"
 
 [build-system]
 requires = ["poetry-core"]
